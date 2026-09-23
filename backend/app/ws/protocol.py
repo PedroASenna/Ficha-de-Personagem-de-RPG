@@ -12,7 +12,7 @@ Cliente → servidor
 Servidor → cliente
     welcome (com a mesa) · pong · presence · roll.result · hp.changed · member.kicked · room.closed · error
     scene.upserted/deleted · token.upserted/moved/deleted · npc.upserted/deleted · npc.hp.changed (Mestre)
-    view.reset (a cena do jogador mudou)
+    view.reset (a cena do jogador mudou) · party.updated (entrou/saiu alguém do grupo)
 """
 
 import uuid

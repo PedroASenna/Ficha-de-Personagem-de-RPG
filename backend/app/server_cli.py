@@ -14,7 +14,6 @@ import argparse
 import asyncio
 import os
 import secrets
-import socket
 import sqlite3
 import sys
 import tarfile
@@ -22,6 +21,7 @@ import tempfile
 from pathlib import Path
 
 from app.core.config import Settings, ensure_runtime_secrets, get_settings
+from app.core.discovery import lan_addresses
 
 
 def resource_root() -> Path:
@@ -47,23 +47,6 @@ def migrate(settings: Settings) -> None:
     cfg.attributes["settings"] = settings
     settings.data_path.mkdir(parents=True, exist_ok=True)
     command.upgrade(cfg, "head")
-
-
-def lan_addresses() -> list[str]:
-    """IPs desta máquina na rede local (para mostrar "conecte em http://IP:porta")."""
-    found: list[str] = []
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("10.255.255.255", 1))  # não envia nada; só descobre a interface de saída
-            found.append(s.getsockname()[0])
-    except OSError:
-        pass
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            found.append(str(info[4][0]))
-    except OSError:
-        pass
-    return [ip for ip in dict.fromkeys(found) if not ip.startswith("127.")]
 
 
 def _print_info(settings: Settings) -> None:

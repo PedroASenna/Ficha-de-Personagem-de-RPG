@@ -62,6 +62,41 @@ jobs:
       - name: Testes no Postgres
         run: pytest -q
 
+  web:
+    name: painel do Mestre (web)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: npm run format:check
+      - run: npx tsc -b
+      - run: npx eslint .
+      - run: npx vitest run
+      - run: npx vite build
+      - name: Servidor para o teste ponta a ponta
+        working-directory: backend
+        run: python -m venv .venv && .venv/bin/pip install -e .
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+
   mobile:
     runs-on: ubuntu-latest
     defaults:

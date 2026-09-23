@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app import __version__
 from app.api.deps import AppState, get_state
+from app.core.discovery import lan_addresses
 from app.schemas.auth import DiscoveryOut
 
 router = APIRouter(tags=["rede local"])
@@ -16,4 +17,5 @@ async def discovery(state: AppState = Depends(get_state)):
         server_id=state.server_id,
         port=state.settings.port,
         registration_open=state.settings.allow_registration,
+        addresses=lan_addresses(),
     )

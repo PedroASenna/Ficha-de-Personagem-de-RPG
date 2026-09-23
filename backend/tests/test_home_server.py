@@ -17,6 +17,7 @@ def test_http_discovery(client):
     assert info["app"] == "rpgplay" and info["name"] == "Mesa de Teste"
     assert info["master_path"] == "/mestre" and info["port"] == 8080
     assert len(info["server_id"]) == 16
+    assert all(not ip.startswith("127.") for ip in info["addresses"])
     # O id é estável (guardado no diretório de dados).
     assert client.get(f"{API}/discovery").json()["server_id"] == info["server_id"]
 

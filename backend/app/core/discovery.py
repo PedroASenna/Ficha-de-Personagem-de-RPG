@@ -10,6 +10,7 @@ Quem não consegue usar UDP (ou está numa rede que bloqueia broadcast) varre a 
 import asyncio
 import json
 import logging
+import socket
 from collections.abc import Callable
 from typing import Any
 
@@ -44,3 +45,20 @@ async def start_discovery(port: int, payload: Callable[[], dict[str, Any]], host
         return None
     logger.info("Descoberta UDP escutando na porta %s", port)
     return transport
+
+
+def lan_addresses() -> list[str]:
+    """IPs desta máquina na rede local (para mostrar "conecte em http://IP:porta")."""
+    found: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))  # não envia nada; só descobre a interface de saída
+            found.append(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            found.append(str(info[4][0]))
+    except OSError:
+        pass
+    return [ip for ip in dict.fromkeys(found) if not ip.startswith("127.")]

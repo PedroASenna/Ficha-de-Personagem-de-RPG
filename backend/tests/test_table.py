@@ -312,3 +312,18 @@ def test_deleting_scene_and_character_token_resets_player_view(client, table, co
     view = client.get(f"{API}/rooms/{table['room']['id']}/table", headers=auth(table["master"])).json()
     assert {s["name"] for s in view["scenes"]} == {"floresta"}
     assert table["tokens"]["beto"]["id"] not in {t["id"] for t in view["tokens"]}
+
+
+def test_master_sees_party_update_when_player_joins(client, table, connect):
+    master, welcome = connect(table["room"]["pin"], table["master"])
+    assert len(welcome["table"]["party"]) == 2
+    carla = register(client, "Carla")
+    char = quick_character(client, carla, "srd-5.1", class_key="fighter", ancestry_key="human")
+    r = client.post(
+        f"{API}/rooms/join", json={"pin": table["room"]["pin"], "character_id": char["id"]}, headers=auth(carla)
+    )
+    assert r.status_code == 200
+    party = receive_until(master, "party.updated")["party"]
+    assert sorted(p["name"] for p in party) == sorted(
+        [table["chars"]["ana"]["name"], table["chars"]["beto"]["name"], char["name"]]
+    )

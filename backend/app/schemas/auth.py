@@ -88,3 +88,5 @@ class DiscoveryOut(BaseModel):
     port: int
     registration_open: bool
     master_path: str = "/mestre"
+    # IPs do servidor na rede local (o painel do Mestre usa para montar o QR code dos celulares).
+    addresses: list[str] = Field(default_factory=list)

@@ -29,6 +29,12 @@ async def _to(state: AppState, room: Room, users, msg_type: str, **fields: Any) 
         await state.broadcaster.publish(room.id, server_message(msg_type, **fields), _ids(users))
 
 
+async def party_updated(state: AppState, session: AsyncSession, room: Room) -> None:
+    """Alguém entrou, trocou de personagem ou saiu: todos recebem o grupo atualizado."""
+    party = await table_service.party_out(session, room, state.media)
+    await state.broadcaster.publish(room.id, server_message("party.updated", party=party))
+
+
 async def send_view_reset(state: AppState, session: AsyncSession, room: Room, user_id: uuid.UUID) -> None:
     """Manda a visão completa da cena para um jogador (ex.: o boneco dele mudou de cena)."""
     member = await room_service.get_member(session, room.id, user_id)

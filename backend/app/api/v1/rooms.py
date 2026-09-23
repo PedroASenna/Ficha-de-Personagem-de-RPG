@@ -10,6 +10,7 @@ from app.models import Room, RoomMember, User
 from app.models.enums import RoomStatus
 from app.schemas.rooms import EventOut, KickIn, RoomCreate, RoomJoin, RoomOut, SetCharacterIn
 from app.services import rooms as service
+from app.ws import table_events
 from app.ws.protocol import server_message
 
 router = APIRouter(prefix="/rooms", tags=["salas"])
@@ -70,6 +71,7 @@ async def join_room(
     if not state.limiters.join_pin.allow(f"join:{user.id}"):
         raise RateLimitedError("Muitas tentativas de PIN. Aguarde um minuto.")
     room = await service.join_room(db, user, data.pin, data.character_id)
+    await table_events.party_updated(state, db, room)
     return await _view(db, state, room, user)
 
 
@@ -95,6 +97,7 @@ async def set_character(
 ):
     room = await _room(db, room_id)
     await service.set_character(db, room, user, data.character_id)
+    await table_events.party_updated(state, db, room)
     return await _view(db, state, room, user)
 
 
@@ -123,6 +126,7 @@ async def kick_player(
     room = await _room(db, room_id)
     await service.kick(db, room, user, data.user_id)
     await state.broadcaster.publish(room.id, server_message("member.kicked", user_id=str(data.user_id)))
+    await table_events.party_updated(state, db, room)
 
 
 @router.post("/{room_id}/close", status_code=status.HTTP_204_NO_CONTENT)
