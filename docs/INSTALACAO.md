@@ -199,7 +199,7 @@ Crie uma tag de versão e envie:
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o `.exe` e o `.deb` do Mestre e o APK, e anexa tudo a um Release. Pela aba Actions também dá para rodar manualmente e baixar os arquivos.
+O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o `.exe` e o `.deb` do Mestre e o APK, e anexa tudo a um Release. Sem tag: aba **Actions → Release → Run workflow**. Com **publicar** marcado, ele cria o Release e a tag da versão (a de `backend/pyproject.toml`); sem essa opção, os arquivos ficam só em *Artifacts*.
 
 **Chave de assinatura do APK (uma vez só):** o Android só atualiza um app se a nova versão tiver a mesma assinatura. Gere uma chave, guarde-a bem e cadastre nos *secrets* do repositório:
 

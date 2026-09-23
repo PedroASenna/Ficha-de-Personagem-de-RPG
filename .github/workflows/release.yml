@@ -1,8 +1,10 @@
 name: Release
 
-# Gera todos os instaladores e anexa ao Release do GitHub:
-#   git tag v0.2.0 && git push origin v0.2.0
-# (ou rode manualmente em Actions → Release → Run workflow, que só guarda os arquivos como artefatos).
+# Gera todos os instaladores e anexa ao Release do GitHub. Dois jeitos:
+#   - tag:    git tag v0.2.0 && git push origin v0.2.0
+#   - manual: Actions → Release → Run workflow. Com "publicar" marcado, cria o Release (e a tag
+#             v<versão do backend/pyproject.toml>, se ainda não existir); sem ele, os arquivos ficam
+#             só em Artifacts.
 #
 # APK assinado: cadastre em Settings → Secrets and variables → Actions
 #   ANDROID_KEYSTORE_BASE64  (base64 do arquivo .jks)   ANDROID_KEYSTORE_PASSWORD
@@ -14,6 +16,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar um Release com os instaladores (cria a tag da versão)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -138,10 +145,22 @@ jobs:
 
   release:
     name: publicar Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publicar)
     needs: [server, desktop, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: backend/pyproject.toml
+          sparse-checkout-cone-mode: false
+      - name: Versão (tag enviada ou a do backend/pyproject.toml)
+        id: versao
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$(sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml | head -n 1)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
         with:
           path: instaladores
@@ -149,6 +168,9 @@ jobs:
       - run: ls -la instaladores
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.versao.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: RPG Play ${{ steps.versao.outputs.tag }}
           files: instaladores/*
           generate_release_notes: true
           body: |
