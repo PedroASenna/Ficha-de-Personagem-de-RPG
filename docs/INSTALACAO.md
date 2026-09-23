@@ -193,13 +193,12 @@ Para quem mexe no código. Cada parte tem teste automatizado; veja o `README.md`
 
 ### Pelo GitHub Actions (todos de uma vez)
 
-Crie uma tag de versão e envie:
+O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o `.exe` e o `.deb` do Mestre e o APK, e publica tudo num Release do GitHub. Para lançar uma versão nova:
 
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
+1. Aumente a versão em `backend/pyproject.toml` (e, para ficar tudo igual, em `web/package.json`, `desktop/package.json`, `mobile/package.json` e em `version`/`versionCode` do `mobile/app.config.ts`).
+2. Faça push para `main`. Se ainda não existe o Release `v<versão>`, o workflow compila tudo (uns 20 a 30 minutos) e publica, criando a tag. Pushes sem mudança de versão só fazem uma checagem rápida.
 
-O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o `.exe` e o `.deb` do Mestre e o APK, e anexa tudo a um Release. Sem tag: aba **Actions → Release → Run workflow**. Com **publicar** marcado, ele cria o Release e a tag da versão (a de `backend/pyproject.toml`); sem essa opção, os arquivos ficam só em *Artifacts*.
+Também funciona enviando uma tag (`git push origin v0.3.0`) ou pela aba **Actions → Release → Run workflow**: com **publicar** marcado, cria o Release; sem essa opção, os arquivos ficam só em *Artifacts*.
 
 **Chave de assinatura do APK (uma vez só):** o Android só atualiza um app se a nova versão tiver a mesma assinatura. Gere uma chave, guarde-a bem e cadastre nos *secrets* do repositório:
 
