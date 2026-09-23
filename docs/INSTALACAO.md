@@ -21,6 +21,8 @@ flowchart LR
 | Programa do Mestre | `RPG-Play-Mestre-Setup-0.2.0.exe` (Windows) ou `rpgplay-mestre_0.2.0_amd64.deb` (Linux) | O Mestre, no PC |
 | App dos jogadores | `RPG-Play-0.2.0.apk` | Cada jogador, no celular Android |
 
+Baixe todos na página **[Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest)** do projeto.
+
 Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador).
 
 ## 1. Servidor

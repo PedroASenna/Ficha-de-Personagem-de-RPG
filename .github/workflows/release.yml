@@ -30,6 +30,8 @@ jobs:
           - arch: arm64 # Raspberry Pi 4/5 com sistema de 64 bits
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
+    # Sem runner ARM disponível, o Release sai mesmo assim (só sem o pacote arm64).
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -106,7 +108,8 @@ jobs:
       - run: npx expo prebuild --platform android --clean --no-install
       - name: Compilar APK (release)
         working-directory: mobile/android
-        run: ./gradlew assembleRelease --no-daemon
+        # Só as arquiteturas de celulares de verdade (x86 é para emulador): build mais rápido e APK menor.
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
       - name: Assinar com a chave do projeto
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

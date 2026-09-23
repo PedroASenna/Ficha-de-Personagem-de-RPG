@@ -1,5 +1,7 @@
 # RPG Play
 
+[![CI](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml/badge.svg)](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml)
+
 RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
 
 - **Personagem jogável em um toque** (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico) e **HUD de combate** com barra de PV que sangra e brilha.
@@ -14,7 +16,7 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou 
 | Painel do Mestre (web) | vem dentro do servidor, em `/mestre` | React 19 · MUI · react-konva · TanStack Query · zustand |
 | App dos jogadores | `.apk` (Android) | Expo SDK 57 · React Native 0.86 · Reanimated 4 · react-native-svg · Paper (Material 3) |
 
-**Para instalar e jogar: [docs/INSTALACAO.md](docs/INSTALACAO.md).**
+**Baixar os instaladores: [Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest).** Para instalar e jogar: [docs/INSTALACAO.md](docs/INSTALACAO.md).
 
 ## Documentação
 

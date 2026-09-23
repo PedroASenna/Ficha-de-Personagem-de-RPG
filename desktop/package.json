@@ -5,7 +5,11 @@
   "description": "Programa do Mestre: encontra o servidor RPG Play na rede de casa e abre a mesa virtual",
   "author": "RPG Play <rpgplay@localhost>",
   "license": "UNLICENSED",
-  "homepage": "https://rpgplay.invalid/",
+  "homepage": "https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG.git"
+  },
   "private": true,
   "main": "dist/main.js",
   "scripts": {
