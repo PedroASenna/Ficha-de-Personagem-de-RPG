@@ -1,0 +1,42 @@
+{
+  "id": "generico",
+  "name": "Genérico (sistema livre)",
+  "short_name": "Genérico",
+  "version": "1.0",
+  "status": "available",
+  "language": "pt-BR",
+  "license": "Original",
+  "license_url": null,
+  "attribution": "",
+  "source_url": null,
+  "description": "Para qualquer sistema ou homebrew: raça, classe e antecedente em texto livre, seis atributos de 1 a 20 e d20 como teste padrão. Use também para sistemas cuja licença não permite apps (ex.: ficha em branco).",
+  "attributes": [
+    { "key": "for", "name": "Força", "abbr": "FOR" },
+    { "key": "agi", "name": "Agilidade", "abbr": "AGI" },
+    { "key": "vig", "name": "Vigor", "abbr": "VIG" },
+    { "key": "int", "name": "Intelecto", "abbr": "INT" },
+    { "key": "per", "name": "Percepção", "abbr": "PER" },
+    { "key": "pre", "name": "Presença", "abbr": "PRE" }
+  ],
+  "modifier": { "strategy": "dnd" },
+  "generation": {
+    "standard_array": [15, 14, 13, 12, 10, 8],
+    "point_buy": null,
+    "roll": "3d6",
+    "manual": { "min": 1, "max": 20 }
+  },
+  "ancestry_label": "Origem",
+  "ancestries": [],
+  "classes": [
+    { "key": "combatente", "name": "Combatente", "description": "Linha de frente: força e resistência.", "attribute_priority": ["for", "vig", "agi", "per", "pre", "int"] },
+    { "key": "explorador", "name": "Explorador", "description": "Ágil e atento ao ambiente.", "attribute_priority": ["agi", "per", "vig", "for", "int", "pre"] },
+    { "key": "mistico", "name": "Místico", "description": "Conhecimento oculto e poderes sobrenaturais.", "attribute_priority": ["int", "pre", "per", "vig", "agi", "for"] },
+    { "key": "diplomata", "name": "Diplomata", "description": "Resolve com palavras o que outros resolvem com espadas.", "attribute_priority": ["pre", "int", "per", "agi", "vig", "for"] }
+  ],
+  "backgrounds": [],
+  "background_bonus": { "strategy": "none" },
+  "allow_custom": true,
+  "hp": { "strategy": "fixed", "value": 10, "minimum": 1 },
+  "carry": { "strategy": "fixed", "value": 50, "unit": "kg" },
+  "dice": { "default_check": "1d20", "direction": "high", "generic_crits": true, "crit_rules": [] }
+}

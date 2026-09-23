@@ -1,0 +1,58 @@
+# Ambiente local: API + PostgreSQL + Redis.
+#   docker compose up --build
+#   API em http://localhost:8080 (docs em /docs)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rpg
+      POSTGRES_PASSWORD: rpg
+      POSTGRES_DB: rpg
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rpg -d rpg"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: &api-env
+      RPG_ENV: dev
+      RPG_DATABASE_URL: postgresql+asyncpg://rpg:rpg@db:5432/rpg
+      RPG_REDIS_URL: redis://redis:6379/0
+      RPG_JWT_SECRET: ${RPG_JWT_SECRET:-dev-only-change-me-dev-only-change-me}
+      RPG_MEDIA_LOCAL_DIR: /home/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    environment: *api-env
+    ports:
+      - "8080:8080"
+    volumes:
+      - media:/home/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  media:

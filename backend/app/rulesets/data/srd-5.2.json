@@ -1,0 +1,70 @@
+{
+  "id": "srd-5.2",
+  "name": "Fantasia 5ª Edição 2024 (SRD 5.2.1)",
+  "short_name": "5ª Ed. 2024",
+  "version": "5.2.1",
+  "status": "available",
+  "language": "pt-BR",
+  "license": "CC-BY-4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+  "attribution": "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode. Tradução e adaptação para o português por RPG Play.",
+  "source_url": "https://www.dndbeyond.com/srd",
+  "description": "Regras de fantasia compatíveis com a revisão 2024 da 5ª edição. Os bônus de atributo vêm do antecedente (+2/+1 ou +1/+1/+1).",
+  "attributes": [
+    { "key": "str", "name": "Força", "abbr": "FOR" },
+    { "key": "dex", "name": "Destreza", "abbr": "DES" },
+    { "key": "con", "name": "Constituição", "abbr": "CON" },
+    { "key": "int", "name": "Inteligência", "abbr": "INT" },
+    { "key": "wis", "name": "Sabedoria", "abbr": "SAB" },
+    { "key": "cha", "name": "Carisma", "abbr": "CAR" }
+  ],
+  "modifier": { "strategy": "dnd" },
+  "generation": {
+    "standard_array": [15, 14, 13, 12, 10, 8],
+    "point_buy": { "budget": 27, "costs": { "8": 0, "9": 1, "10": 2, "11": 3, "12": 4, "13": 5, "14": 7, "15": 9 } },
+    "roll": "4d6kh3",
+    "manual": { "min": 3, "max": 18 }
+  },
+  "ancestry_label": "Espécie",
+  "ancestries": [
+    { "key": "dragonborn", "name": "Draconato", "source_name": "Dragonborn", "description": "Descendente de dragões, com sopro elemental.", "speed": 30, "traits": ["Ancestralidade Dracônica", "Arma de Sopro", "Resistência a Dano", "Visão no Escuro"] },
+    { "key": "dwarf", "name": "Anão", "source_name": "Dwarf", "description": "Resistente como a pedra de onde veio.", "speed": 30, "hp_bonus_per_level": 1, "traits": ["Visão no Escuro", "Resiliência Anã", "Robustez Anã", "Sentido de Pedra"] },
+    { "key": "elf", "name": "Elfo", "source_name": "Elf", "description": "Longevo, de sentidos aguçados e linhagem feérica.", "speed": 30, "traits": ["Visão no Escuro", "Linhagem Élfica", "Ancestralidade Feérica", "Sentidos Aguçados", "Transe"] },
+    { "key": "gnome", "name": "Gnomo", "source_name": "Gnome", "description": "Pequeno, astuto e cheio de curiosidade.", "speed": 30, "traits": ["Visão no Escuro", "Esperteza Gnômica", "Linhagem Gnômica"] },
+    { "key": "goliath", "name": "Golias", "source_name": "Goliath", "description": "Gigantes entre os mortais, herdeiros de titãs.", "speed": 35, "traits": ["Ancestralidade Gigante", "Forma Grande", "Constituição Poderosa"] },
+    { "key": "halfling", "name": "Halfling", "source_name": "Halfling", "description": "Pequeno, corajoso e com uma sorte absurda.", "speed": 30, "traits": ["Bravura", "Agilidade Halfling", "Sortudo", "Furtividade Natural"] },
+    { "key": "human", "name": "Humano", "source_name": "Human", "description": "Engenhoso e versátil.", "speed": 30, "traits": ["Engenhoso", "Habilidoso", "Versátil"] },
+    { "key": "orc", "name": "Orc", "source_name": "Orc", "description": "Incansável, movido por surtos de adrenalina.", "speed": 30, "traits": ["Surto de Adrenalina", "Visão no Escuro", "Resistência Implacável"] },
+    { "key": "tiefling", "name": "Tiferino", "source_name": "Tiefling", "description": "Marcado por um legado ínfero.", "speed": 30, "traits": ["Visão no Escuro", "Legado Ínfero", "Presença Sobrenatural"] }
+  ],
+  "classes": [
+    { "key": "barbarian", "name": "Bárbaro", "source_name": "Barbarian", "description": "Fúria e força bruta na linha de frente.", "hit_die": 12, "primary": ["str"], "attribute_priority": ["str", "con", "dex", "wis", "cha", "int"], "saving_throws": ["str", "con"] },
+    { "key": "bard", "name": "Bardo", "source_name": "Bard", "description": "Magia através da música e da palavra.", "hit_die": 8, "primary": ["cha"], "attribute_priority": ["cha", "dex", "con", "wis", "int", "str"], "saving_throws": ["dex", "cha"], "spell_slots_level1": { "1": 2 } },
+    { "key": "cleric", "name": "Clérigo", "source_name": "Cleric", "description": "Canaliza o poder divino para curar e proteger.", "hit_die": 8, "primary": ["wis"], "attribute_priority": ["wis", "con", "str", "dex", "cha", "int"], "saving_throws": ["wis", "cha"], "spell_slots_level1": { "1": 2 } },
+    { "key": "druid", "name": "Druida", "source_name": "Druid", "description": "Guardião da natureza que muda de forma.", "hit_die": 8, "primary": ["wis"], "attribute_priority": ["wis", "con", "dex", "int", "cha", "str"], "saving_throws": ["int", "wis"], "spell_slots_level1": { "1": 2 } },
+    { "key": "fighter", "name": "Guerreiro", "source_name": "Fighter", "description": "Mestre de armas e armaduras.", "hit_die": 10, "primary": ["str", "dex"], "attribute_priority": ["str", "con", "dex", "wis", "cha", "int"], "saving_throws": ["str", "con"] },
+    { "key": "monk", "name": "Monge", "source_name": "Monk", "description": "Artes marciais e disciplina interior.", "hit_die": 8, "primary": ["dex", "wis"], "attribute_priority": ["dex", "wis", "con", "str", "int", "cha"], "saving_throws": ["str", "dex"] },
+    { "key": "paladin", "name": "Paladino", "source_name": "Paladin", "description": "Guerreiro sagrado preso a um juramento.", "hit_die": 10, "primary": ["str", "cha"], "attribute_priority": ["str", "cha", "con", "wis", "dex", "int"], "saving_throws": ["wis", "cha"], "spell_slots_level1": { "1": 2 } },
+    { "key": "ranger", "name": "Patrulheiro", "source_name": "Ranger", "description": "Caçador e explorador das terras selvagens.", "hit_die": 10, "primary": ["dex", "wis"], "attribute_priority": ["dex", "wis", "con", "str", "int", "cha"], "saving_throws": ["str", "dex"], "spell_slots_level1": { "1": 2 } },
+    { "key": "rogue", "name": "Ladino", "source_name": "Rogue", "description": "Furtividade, precisão e truques sujos.", "hit_die": 8, "primary": ["dex"], "attribute_priority": ["dex", "con", "cha", "wis", "int", "str"], "saving_throws": ["dex", "int"] },
+    { "key": "sorcerer", "name": "Feiticeiro", "source_name": "Sorcerer", "description": "Magia inata que corre no sangue.", "hit_die": 6, "primary": ["cha"], "attribute_priority": ["cha", "con", "dex", "wis", "int", "str"], "saving_throws": ["con", "cha"], "spell_slots_level1": { "1": 2 } },
+    { "key": "warlock", "name": "Bruxo", "source_name": "Warlock", "description": "Poder obtido por um pacto com uma entidade.", "hit_die": 8, "primary": ["cha"], "attribute_priority": ["cha", "con", "dex", "wis", "int", "str"], "saving_throws": ["wis", "cha"], "spell_slots_level1": { "1": 1 } },
+    { "key": "wizard", "name": "Mago", "source_name": "Wizard", "description": "Estudioso da magia arcana e de seu grimório.", "hit_die": 6, "primary": ["int"], "attribute_priority": ["int", "con", "dex", "wis", "cha", "str"], "saving_throws": ["int", "wis"], "spell_slots_level1": { "1": 2 } }
+  ],
+  "backgrounds": [
+    { "key": "acolyte", "name": "Acólito", "source_name": "Acolyte", "description": "Criado a serviço de um templo.", "bonus_options": ["int", "wis", "cha"], "skills": ["Intuição", "Religião"] },
+    { "key": "criminal", "name": "Criminoso", "source_name": "Criminal", "description": "Sobreviveu nas ruas à margem da lei.", "bonus_options": ["dex", "con", "int"], "skills": ["Furtividade", "Prestidigitação"] },
+    { "key": "sage", "name": "Sábio", "source_name": "Sage", "description": "Anos entre bibliotecas e tomos antigos.", "bonus_options": ["con", "int", "wis"], "skills": ["Arcanismo", "História"] },
+    { "key": "soldier", "name": "Soldado", "source_name": "Soldier", "description": "Treinado para a guerra desde jovem.", "bonus_options": ["str", "dex", "con"], "skills": ["Atletismo", "Intimidação"] }
+  ],
+  "background_bonus": { "strategy": "plus2_plus1" },
+  "allow_custom": false,
+  "hp": { "strategy": "hit_die_max_plus_mod", "attribute": "con", "minimum": 1 },
+  "carry": { "strategy": "attribute_multiplier", "attribute": "str", "multiplier": 15, "unit": "lb" },
+  "dice": {
+    "default_check": "1d20",
+    "direction": "high",
+    "generic_crits": true,
+    "crit_rules": [{ "sides": 20, "success": [20], "failure": [1] }]
+  }
+}

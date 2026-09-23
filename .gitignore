@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+backend/media/
+
+# Segredos
+.env
+*.keystore
+*.jks
+google-services.json
+service-account*.json
+
+# Node / Expo
+node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/android/
+mobile/ios/
+mobile/web-build/
+*.tsbuildinfo
+coverage/
+
+# Sistema
+.DS_Store

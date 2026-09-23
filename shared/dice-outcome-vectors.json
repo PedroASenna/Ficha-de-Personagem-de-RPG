@@ -1,0 +1,41 @@
+{
+  "description": "Casos de teste compartilhados: backend (pytest) e mobile (jest) precisam produzir exatamente estes resultados. 'kept' = pares [lados, valor] dos dados mantidos com sinal positivo.",
+  "rules": {
+    "d20": { "crit_rules": [{ "sides": 20, "success": [20], "failure": [1] }], "direction": "high", "generic_crits": true },
+    "d20_improved": { "crit_rules": [{ "sides": 20, "success": [19, 20], "failure": [1] }], "direction": "high", "generic_crits": true },
+    "generic": {},
+    "roll_under": { "crit_rules": [], "direction": "low", "generic_crits": true },
+    "no_generic": { "crit_rules": [], "direction": "high", "generic_crits": false }
+  },
+  "cases": [
+    { "name": "d20 natural 20", "rules": "d20", "kept": [[20, 20]], "expected": { "tier": "critical_success", "natural": 20, "intensity": 1.0 } },
+    { "name": "d20 natural 1", "rules": "d20", "kept": [[20, 1]], "expected": { "tier": "critical_failure", "natural": 1, "intensity": 1.0 } },
+    { "name": "d20 alto (17)", "rules": "d20", "kept": [[20, 17]], "expected": { "tier": "high", "natural": 17, "intensity": 0.684 } },
+    { "name": "d20 baixo (4)", "rules": "d20", "kept": [[20, 4]], "expected": { "tier": "low", "natural": 4, "intensity": 0.684 } },
+    { "name": "d20 meio (10)", "rules": "d20", "kept": [[20, 10]], "expected": { "tier": "neutral", "natural": 10, "intensity": 0.053 } },
+    { "name": "d20 limite inferior neutro (5)", "rules": "d20", "kept": [[20, 5]], "expected": { "tier": "neutral", "natural": 5, "intensity": 0.579 } },
+    { "name": "d20 limite superior neutro (16)", "rules": "d20", "kept": [[20, 16]], "expected": { "tier": "neutral", "natural": 16, "intensity": 0.579 } },
+    { "name": "crítico aprimorado 19", "rules": "d20_improved", "kept": [[20, 19]], "expected": { "tier": "critical_success", "natural": 19, "intensity": 1.0 } },
+    { "name": "d6 máximo vira crítico genérico", "rules": "generic", "kept": [[6, 6]], "expected": { "tier": "critical_success", "natural": 6, "intensity": 1.0 } },
+    { "name": "d6 mínimo vira falha crítica genérica", "rules": "generic", "kept": [[6, 1]], "expected": { "tier": "critical_failure", "natural": 1, "intensity": 1.0 } },
+    { "name": "d6 fora do d20 usa crítico genérico mesmo com regra de d20", "rules": "d20", "kept": [[6, 6]], "expected": { "tier": "critical_success", "natural": 6, "intensity": 1.0 } },
+    { "name": "d4 máximo não é crítico (chance > 1/6)", "rules": "generic", "kept": [[4, 4]], "expected": { "tier": "high", "natural": 4, "intensity": 1.0 } },
+    { "name": "d4 mínimo é só baixo", "rules": "generic", "kept": [[4, 1]], "expected": { "tier": "low", "natural": 1, "intensity": 1.0 } },
+    { "name": "moeda d2 cara", "rules": "generic", "kept": [[2, 2]], "expected": { "tier": "high", "natural": 2, "intensity": 1.0 } },
+    { "name": "moeda d2 coroa", "rules": "generic", "kept": [[2, 1]], "expected": { "tier": "low", "natural": 1, "intensity": 1.0 } },
+    { "name": "2d6 duplo seis", "rules": "generic", "kept": [[6, 6], [6, 6]], "expected": { "tier": "critical_success", "natural": null, "intensity": 1.0 } },
+    { "name": "2d6 olhos de cobra", "rules": "generic", "kept": [[6, 1], [6, 1]], "expected": { "tier": "critical_failure", "natural": null, "intensity": 1.0 } },
+    { "name": "2d6 médio", "rules": "generic", "kept": [[6, 3], [6, 4]], "expected": { "tier": "neutral", "natural": null, "intensity": 0.0 } },
+    { "name": "4d6kh3 alto", "rules": "generic", "kept": [[6, 6], [6, 5], [6, 5]], "expected": { "tier": "high", "natural": null, "intensity": 0.733 } },
+    { "name": "d20+d6 misto", "rules": "d20", "kept": [[20, 20], [6, 3]], "expected": { "tier": "high", "natural": null, "intensity": 0.75 } },
+    { "name": "d100 roll-under 01 é sucesso crítico", "rules": "roll_under", "kept": [[100, 1]], "expected": { "tier": "critical_success", "natural": 1, "intensity": 1.0 } },
+    { "name": "d100 roll-under 100 é falha crítica", "rules": "roll_under", "kept": [[100, 100]], "expected": { "tier": "critical_failure", "natural": 100, "intensity": 1.0 } },
+    { "name": "d100 roll-under 15 é alto", "rules": "roll_under", "kept": [[100, 15]], "expected": { "tier": "high", "natural": 15, "intensity": 0.717 } },
+    { "name": "d100 roll-under 90 é baixo", "rules": "roll_under", "kept": [[100, 90]], "expected": { "tier": "low", "natural": 90, "intensity": 0.798 } },
+    { "name": "sem crítico genérico", "rules": "no_generic", "kept": [[20, 20]], "expected": { "tier": "high", "natural": 20, "intensity": 1.0 } },
+    { "name": "d1000 máximo", "rules": "generic", "kept": [[1000, 1000]], "expected": { "tier": "critical_success", "natural": 1000, "intensity": 1.0 } },
+    { "name": "d1000 quase máximo", "rules": "generic", "kept": [[1000, 999]], "expected": { "tier": "high", "natural": 999, "intensity": 0.998 } },
+    { "name": "d5 máximo", "rules": "generic", "kept": [[5, 5]], "expected": { "tier": "high", "natural": 5, "intensity": 1.0 } },
+    { "name": "só modificador", "rules": "generic", "kept": [], "expected": { "tier": "neutral", "natural": null, "intensity": 0.0 } }
+  ]
+}

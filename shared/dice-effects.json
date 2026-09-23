@@ -1,0 +1,52 @@
+{
+  "critical_failure": {
+    "animation": "die_crack",
+    "palette": "blood",
+    "sound": "impact_dry",
+    "haptic": "error_heavy",
+    "shake": { "px": 8, "ms": 420 },
+    "particles": "embers_dark",
+    "crack": true,
+    "light_burst": false
+  },
+  "low": {
+    "animation": "dim_pulse",
+    "palette": "ember",
+    "sound": "thud_soft",
+    "haptic": "impact_medium",
+    "shake": { "px": 3, "ms": 200 },
+    "particles": null,
+    "crack": false,
+    "light_burst": false
+  },
+  "neutral": {
+    "animation": "settle",
+    "palette": "stone",
+    "sound": "clack",
+    "haptic": "impact_light",
+    "shake": { "px": 0, "ms": 0 },
+    "particles": null,
+    "crack": false,
+    "light_burst": false
+  },
+  "high": {
+    "animation": "glow_soft",
+    "palette": "gold_soft",
+    "sound": "chime",
+    "haptic": "success_light",
+    "shake": { "px": 0, "ms": 0 },
+    "particles": "sparkles",
+    "crack": false,
+    "light_burst": false
+  },
+  "critical_success": {
+    "animation": "golden_burst",
+    "palette": "gold",
+    "sound": "epic_fanfare",
+    "haptic": "success_heavy",
+    "shake": { "px": 2, "ms": 250 },
+    "particles": "confetti",
+    "crack": false,
+    "light_burst": true
+  }
+}

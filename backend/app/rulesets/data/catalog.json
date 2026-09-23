@@ -1,0 +1,74 @@
+[
+  {
+    "id": "old-dragon-2",
+    "name": "Old Dragon 2",
+    "status": "planned",
+    "license": "CC-BY-SA-4.0",
+    "license_url": "https://olddragon.com.br/licenciamento",
+    "notes": "SRD aberto, uso comercial permitido. O compartilhamento pela mesma licença vale para o pacote de dados, não para o código do app. Próximo da fila (sistema brasileiro)."
+  },
+  {
+    "id": "pf2e-remaster-orc",
+    "name": "Pathfinder 2e Remaster (ORC)",
+    "status": "planned",
+    "license": "ORC",
+    "license_url": "https://2e.aonprd.com/Licenses.aspx",
+    "notes": "Regras sob ORC. Nomes e marcas são Reserved Material: revisar nome exibido e atribuição antes de publicar."
+  },
+  {
+    "id": "brp-orc",
+    "name": "Basic Roleplaying (d100)",
+    "status": "planned",
+    "license": "ORC",
+    "license_url": "https://www.chaosium.com/brp-system-reference-document/",
+    "notes": "Sistema percentual roll-under (direction=low). Conteúdo de Call of Cthulhu não é coberto."
+  },
+  {
+    "id": "fate-core",
+    "name": "Fate Core",
+    "status": "planned",
+    "license": "CC-BY-3.0",
+    "license_url": "https://fate-srd.com/",
+    "notes": "Exige dados Fudge (4dF); o motor de dados precisa ganhar o tipo dF antes."
+  },
+  {
+    "id": "cypher-system",
+    "name": "Cypher System",
+    "status": "planned",
+    "license": "CSOL",
+    "license_url": "https://www.montecookgames.com/cypher-system-open-license/",
+    "notes": "Licença aberta do Cypher System (CSOL). Conferir requisitos de logo/atribuição."
+  },
+  {
+    "id": "year-zero-engine",
+    "name": "Year Zero Engine",
+    "status": "planned",
+    "license": "YZE-FTL",
+    "license_url": "https://freeleaguepublishing.com/community-content/free-tabletop-licenses/",
+    "notes": "Parada de d6 (contagem de sucessos): precisa de um modo de classificação por sucessos."
+  },
+  {
+    "id": "forged-in-the-dark",
+    "name": "Forged in the Dark",
+    "status": "planned",
+    "license": "CC-BY-3.0",
+    "license_url": "https://bladesinthedark.com/licensing",
+    "notes": "Parada de d6 (maior resultado). Mesmo requisito de classificação por parada."
+  },
+  {
+    "id": "daggerheart",
+    "name": "Daggerheart",
+    "status": "restricted",
+    "license": "DPCGL",
+    "license_url": "https://darringtonpress.com/license/",
+    "notes": "A licença comunitária não cobre explicitamente aplicativos. Só publicar com autorização por escrito da Darrington Press."
+  },
+  {
+    "id": "ordem-paranormal",
+    "name": "Ordem Paranormal",
+    "status": "restricted",
+    "license": "OP-Comunidade",
+    "license_url": "https://ordemparanormal.com.br/licenca",
+    "notes": "Licença da Comunidade (jun/2026) parece permitir apps, mas não abre o sistema. Exige revisão jurídica antes de incluir regras."
+  }
+]
