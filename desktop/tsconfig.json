@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "sourceMap": false,
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

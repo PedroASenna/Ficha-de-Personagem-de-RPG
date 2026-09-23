@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'"
+    />
+    <meta name="color-scheme" content="dark" />
+    <title>RPG Play Mestre</title>
+    <link rel="stylesheet" href="launcher.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="logo.svg" alt="" width="72" height="72" />
+        <div>
+          <h1>RPG Play Mestre</h1>
+          <p class="muted">Encontre o servidor da mesa na rede de casa.</p>
+        </div>
+      </header>
+
+      <p id="erro" class="alert" role="alert" hidden></p>
+
+      <section>
+        <div class="section-title">
+          <h2>Servidores encontrados</h2>
+          <button id="procurar" type="button" class="secondary">Procurar de novo</button>
+        </div>
+        <p id="status" class="muted" aria-live="polite">Procurando servidores na rede…</p>
+        <ul id="servidores"></ul>
+      </section>
+
+      <section>
+        <h2>Ou digite o endereço</h2>
+        <form id="manual">
+          <input
+            id="endereco"
+            name="endereco"
+            type="text"
+            placeholder="192.168.0.20 ou 192.168.0.20:8080"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Endereço do servidor"
+          />
+          <button type="submit">Conectar</button>
+        </form>
+        <p class="muted small">
+          No computador do servidor, <code>sudo rpgplay-server info</code> mostra o endereço. O servidor e este PC
+          precisam estar na mesma rede (Wi-Fi ou cabo).
+        </p>
+      </section>
+    </main>
+    <script src="launcher.js"></script>
+  </body>
+</html>

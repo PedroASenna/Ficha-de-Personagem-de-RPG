@@ -1,0 +1,85 @@
+{
+  "name": "rpgplay-mestre",
+  "productName": "RPG Play Mestre",
+  "version": "0.2.0",
+  "description": "Programa do Mestre: encontra o servidor RPG Play na rede de casa e abre a mesa virtual",
+  "author": "RPG Play <rpgplay@localhost>",
+  "license": "UNLICENSED",
+  "homepage": "https://rpgplay.invalid/",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "e2e": "npm run build && playwright test",
+    "dist:linux": "npm run build && electron-builder --linux deb",
+    "dist:win": "npm run build && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.13.6",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "eslint": "10.11.0",
+    "globals": "17.12.0",
+    "prettier": "3.8.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.1"
+  },
+  "type": "commonjs",
+  "build": {
+    "appId": "com.rpgplay.mestre",
+    "productName": "RPG Play Mestre",
+    "copyright": "RPG Play",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*.js",
+      "launcher/**",
+      "package.json"
+    ],
+    "asar": true,
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "category": "Game",
+      "executableName": "rpgplay-mestre",
+      "synopsis": "Painel do Mestre da mesa de RPG na rede de casa",
+      "description": "Encontra o servidor RPG Play na rede e abre a mesa virtual do Mestre: mapas, cenas, bonecos, inimigos e rolagens.",
+      "maintainer": "RPG Play <rpgplay@localhost>",
+      "icon": "build/icon.png"
+    },
+    "deb": {
+      "priority": "optional"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "RPG Play Mestre",
+      "artifactName": "RPG-Play-Mestre-Setup-${version}.${ext}"
+    },
+    "publish": null
+  }
+}
