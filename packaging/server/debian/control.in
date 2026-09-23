@@ -1,0 +1,16 @@
+Package: rpgplay-server
+Version: @VERSION@
+Section: games
+Priority: optional
+Architecture: @ARCH@
+Maintainer: RPG Play <rpgplay@localhost>
+Installed-Size: @SIZE@
+Depends: libc6 (>= 2.28), libstdc++6, libgcc-s1, passwd, util-linux
+Recommends: systemd
+Description: RPG Play - servidor da mesa de RPG na rede de casa
+ Servidor que guarda contas, personagens, campanhas e mapas e transmite a mesa
+ em tempo real pelo Wi-Fi: rolagens de dados, pontos de vida, bonecos no mapa.
+ Os celulares (app RPG Play) e o programa do Mestre encontram o servidor
+ sozinhos na rede. O painel do Mestre também abre no navegador em /mestre.
+ .
+ Portas: 8080/tcp (app e painel) e 47777/udp (descoberta na rede).

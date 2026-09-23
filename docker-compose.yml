@@ -1,58 +1,21 @@
-# Ambiente local: API + PostgreSQL + Redis.
-#   docker compose up --build
-#   API em http://localhost:8080 (docs em /docs)
+# Servidor RPG Play em container (alternativa ao pacote .deb).
+#   docker compose up -d --build
+#   docker compose exec rpgplay python -m app.server_cli info            endereços
+#   docker compose exec rpgplay python -m app.server_cli reset-password <usuário>
+#
+# network_mode: host (Linux) para a descoberta automática funcionar: os celulares procuram o servidor por
+# broadcast UDP na porta 47777, que não atravessa a rede interna do Docker. Painel: http://IP:8080/mestre
 services:
-  db:
-    image: postgres:16-alpine
+  rpgplay:
+    build: .
+    network_mode: host
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: rpg
-      POSTGRES_PASSWORD: rpg
-      POSTGRES_DB: rpg
-    ports:
-      - "5432:5432"
+      RPG_SERVER_NAME: "Mesa de RPG"
+      RPG_PORT: "8080"
+      RPG_ALLOW_REGISTRATION: "true"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rpg -d rpg"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 3s
-      retries: 20
-
-  migrate:
-    build: ./backend
-    command: ["alembic", "upgrade", "head"]
-    environment: &api-env
-      RPG_ENV: dev
-      RPG_DATABASE_URL: postgresql+asyncpg://rpg:rpg@db:5432/rpg
-      RPG_REDIS_URL: redis://redis:6379/0
-      RPG_JWT_SECRET: ${RPG_JWT_SECRET:-dev-only-change-me-dev-only-change-me}
-      RPG_MEDIA_LOCAL_DIR: /home/app/media
-    depends_on:
-      db:
-        condition: service_healthy
-
-  api:
-    build: ./backend
-    environment: *api-env
-    ports:
-      - "8080:8080"
-    volumes:
-      - media:/home/app/media
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
+      - rpgplay-data:/data
 
 volumes:
-  pgdata:
-  media:
+  rpgplay-data:

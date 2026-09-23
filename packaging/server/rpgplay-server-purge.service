@@ -1,0 +1,16 @@
+[Unit]
+Description=RPG Play - limpeza diária (retenção de dados)
+After=rpgplay-server.service
+
+[Service]
+Type=oneshot
+User=rpgplay
+Group=rpgplay
+EnvironmentFile=/etc/rpgplay/server.env
+WorkingDirectory=/var/lib/rpgplay
+ExecStart=/opt/rpgplay-server/rpgplay-server purge
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rpgplay
+PrivateTmp=true

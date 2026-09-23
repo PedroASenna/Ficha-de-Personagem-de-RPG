@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  remove)
+    if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
+    echo "RPG Play removido. As campanhas continuam em /var/lib/rpgplay (apague com: sudo apt purge rpgplay-server)."
+    ;;
+  purge)
+    if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
+    rm -rf /var/lib/rpgplay /etc/rpgplay
+    ;;
+esac
+
+exit 0

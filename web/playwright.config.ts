@@ -28,7 +28,8 @@ export default defineConfig({
       RPG_DATA_DIR: ".e2e-data",
       RPG_PORT: String(PORT),
       RPG_DISCOVERY_ENABLED: "false",
-      RPG_WEB_DIST_DIR: "dist",
+      // Com o executável empacotado, vale o painel que vai dentro dele; senão, o web/dist recém-compilado.
+      ...(process.env.RPG_SERVER_BIN ? {} : { RPG_WEB_DIST_DIR: "dist" }),
       RPG_SERVER_NAME: "Mesa E2E",
     },
   },

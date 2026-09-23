@@ -18,6 +18,7 @@ import sqlite3
 import sys
 import tarfile
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from app.core.config import Settings, ensure_runtime_secrets, get_settings
@@ -27,6 +28,12 @@ from app.core.discovery import lan_addresses
 def resource_root() -> Path:
     """Raiz dos arquivos do app (no executável do PyInstaller, a pasta extraída)."""
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+
+
+def migrations_dir() -> Path:
+    """Migrações do Alembic: "migrations" no executável (evita colidir com o pacote alembic), "alembic" no código."""
+    bundled = resource_root() / "migrations"
+    return bundled if bundled.exists() else resource_root() / "alembic"
 
 
 def load_settings() -> Settings:
@@ -43,7 +50,7 @@ def migrate(settings: Settings) -> None:
     from alembic import command
 
     cfg = Config()
-    cfg.set_main_option("script_location", str(resource_root() / "alembic"))
+    cfg.set_main_option("script_location", str(migrations_dir()))
     cfg.attributes["settings"] = settings
     settings.data_path.mkdir(parents=True, exist_ok=True)
     command.upgrade(cfg, "head")
@@ -129,27 +136,80 @@ def cmd_make_admin(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def cmd_backup(args: argparse.Namespace) -> int:
-    settings = load_settings()
+def _sqlite_file(settings: Settings) -> Path | None:
     if not settings.sqlalchemy_url.startswith("sqlite"):
-        print("Backup automático só para SQLite. Com Postgres, use pg_dump.", file=sys.stderr)
+        print("Backup e restauração automáticos só com SQLite. Com Postgres, use pg_dump.", file=sys.stderr)
+        return None
+    return Path(settings.sqlalchemy_url.split("///", 1)[1])
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Banco (cópia consistente, mesmo com o servidor rodando) + imagens num .tar.gz. "-" escreve na saída padrão."""
+    settings = load_settings()
+    db_file = _sqlite_file(settings)
+    if db_file is None:
         return 1
-    db_file = Path(settings.sqlalchemy_url.split("///", 1)[1])
-    output = Path(args.output).expanduser().resolve()
+    to_stdout = args.output == "-"
     with tempfile.TemporaryDirectory() as tmp:
         snapshot = Path(tmp) / "rpgplay.db"
-        # API de backup do SQLite: cópia consistente mesmo com o servidor rodando.
         source = sqlite3.connect(db_file)
         target = sqlite3.connect(snapshot)
         with target:
             source.backup(target)
         source.close()
         target.close()
-        with tarfile.open(output, "w:gz") as tar:
+        if to_stdout:
+            tar = tarfile.open(fileobj=sys.stdout.buffer, mode="w|gz")
+        else:
+            tar = tarfile.open(Path(args.output).expanduser().resolve(), "w:gz")
+        with tar:
             tar.add(snapshot, arcname="rpgplay.db")
             if settings.media_path.exists():
                 tar.add(settings.media_path, arcname="media")
-    print(f"Backup salvo em {output}")
+    if not to_stdout:
+        print(f"Backup salvo em {Path(args.output).expanduser().resolve()}")
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    """Volta um backup. O servidor precisa estar parado; os dados atuais ficam guardados em antes-da-restauracao-*."""
+    settings = load_settings()
+    db_file = _sqlite_file(settings)
+    if db_file is None:
+        return 1
+    data = settings.data_path
+    data.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=data, prefix=".restaurando-") as tmp:
+        staging = Path(tmp)
+        if args.input == "-":
+            tar = tarfile.open(fileobj=sys.stdin.buffer, mode="r|gz")
+        else:
+            tar = tarfile.open(Path(args.input).expanduser(), "r:gz")
+        try:
+            with tar:
+                # filter="data" recusa caminhos absolutos, "..", links e arquivos especiais.
+                tar.extractall(staging, filter="data")
+        except (tarfile.FilterError, tarfile.ReadError) as exc:
+            print(f"Backup recusado: arquivo inválido ou inseguro ({exc}).", file=sys.stderr)
+            return 1
+        new_db = staging / "rpgplay.db"
+        if not new_db.is_file() or new_db.read_bytes()[:16] != b"SQLite format 3\x00":
+            print("Arquivo inválido: não encontrei o banco rpgplay.db dentro do backup.", file=sys.stderr)
+            return 1
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        previous = data / f"antes-da-restauracao-{stamp}"
+        previous.mkdir()
+        for suffix in ("", "-wal", "-shm"):
+            current = db_file.with_name(db_file.name + suffix)
+            if current.exists():
+                current.rename(previous / current.name)
+        if settings.media_path.exists():
+            settings.media_path.rename(previous / "media")
+        new_db.rename(db_file)
+        if (staging / "media").is_dir():
+            (staging / "media").rename(settings.media_path)
+    migrate(settings)
+    print(f"Backup restaurado. Os dados anteriores ficaram em {previous}")
     return 0
 
 
@@ -180,7 +240,9 @@ def main(argv: list[str] | None = None) -> int:
     admin = sub.add_parser("make-admin", help="torna um usuário admin")
     admin.add_argument("username")
     backup = sub.add_parser("backup", help="gera um .tar.gz com banco e imagens")
-    backup.add_argument("output")
+    backup.add_argument("output", help='arquivo de saída ("-" = saída padrão)')
+    restore = sub.add_parser("restore", help="volta um backup (com o servidor parado)")
+    restore.add_argument("input", help='arquivo .tar.gz ("-" = entrada padrão)')
     sub.add_parser("purge", help="aplica a retenção de dados")
     sub.add_parser("info", help="mostra os endereços para conectar")
     args = parser.parse_args(argv)
@@ -189,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         "reset-password": cmd_reset_password,
         "make-admin": cmd_make_admin,
         "backup": cmd_backup,
+        "restore": cmd_restore,
         "purge": cmd_purge,
         "info": cmd_info,
         None: cmd_serve,

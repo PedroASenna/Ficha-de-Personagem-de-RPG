@@ -1,0 +1,8 @@
+RPG Play - servidor da mesa de RPG
+
+Conteúdo de regras: System Reference Document 5.1 e 5.2 (Creative Commons Attribution 4.0,
+Wizards of the Coast LLC); sistema genérico original do projeto.
+
+Este pacote inclui um interpretador Python e bibliotecas de terceiros (FastAPI, Starlette, Uvicorn,
+SQLAlchemy, Alembic, Pydantic, Pillow, argon2-cffi, PyJWT e dependências), cada uma sob a própria
+licença (MIT, BSD, Apache-2.0, PSF, HPND).

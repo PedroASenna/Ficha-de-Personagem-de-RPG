@@ -1,0 +1,21 @@
+RPG Play - servidor da mesa de RPG na rede de casa
+===================================================
+
+Depois de instalar, o serviço já está rodando:
+
+  sudo systemctl status rpgplay-server       estado
+  journalctl -u rpgplay-server -f            logs
+  sudo rpgplay-server info                   endereços para conectar
+
+Painel do Mestre: http://IP-DESTE-COMPUTADOR:8080/mestre (ou o programa "RPG Play Mestre" no PC).
+Celulares: app RPG Play no mesmo Wi-Fi (acha o servidor sozinho ou pelo QR code do painel).
+
+Configuração: /etc/rpgplay/server.env (depois: sudo systemctl restart rpgplay-server)
+Dados: /var/lib/rpgplay
+
+Esqueceram a senha:   sudo rpgplay-server reset-password <usuário>
+Backup:               sudo rpgplay-server backup ~/rpgplay-backup.tar.gz
+Restaurar backup:     sudo rpgplay-server restore ~/rpgplay-backup.tar.gz
+
+Firewall (se estiver ativo): libere 8080/tcp e 47777/udp para a rede de casa.
+Nunca exponha a porta 8080 para a internet (sem HTTPS, o servidor é feito para a rede local).

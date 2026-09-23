@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    if ! getent passwd rpgplay >/dev/null; then
+      useradd --system --user-group --home-dir /var/lib/rpgplay --no-create-home \
+        --shell /usr/sbin/nologin --comment "Servidor RPG Play" rpgplay
+    fi
+    install -d -o rpgplay -g rpgplay -m 0750 /var/lib/rpgplay
+    chown root:rpgplay /etc/rpgplay/server.env
+    chmod 0640 /etc/rpgplay/server.env
+
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload
+      systemctl enable rpgplay-server.service rpgplay-server-purge.timer >/dev/null 2>&1 || true
+      systemctl restart rpgplay-server.service
+      systemctl start rpgplay-server-purge.timer || true
+    fi
+
+    PORT=$(sed -n 's/^RPG_PORT=//p' /etc/rpgplay/server.env | tr -d '"' | tail -n 1)
+    PORT=${PORT:-8080}
+    IPS=$(hostname -I 2>/dev/null || true)
+    echo ""
+    echo "RPG Play instalado."
+    for ip in $IPS; do
+      case "$ip" in *:*) continue ;; esac
+      echo "  Painel do Mestre (navegador ou app do PC): http://$ip:$PORT/mestre"
+      echo "  Celulares (app RPG Play):                  http://$ip:$PORT"
+    done
+    echo "  Configuração: /etc/rpgplay/server.env   Comandos: sudo rpgplay-server --help"
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+      echo ""
+      echo "  O firewall (ufw) está ativo. Libere as portas para a rede de casa:"
+      echo "    sudo ufw allow $PORT/tcp && sudo ufw allow 47777/udp"
+    fi
+    echo ""
+    ;;
+esac
+
+exit 0

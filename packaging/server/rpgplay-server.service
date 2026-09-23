@@ -1,0 +1,40 @@
+[Unit]
+Description=RPG Play - servidor da mesa de RPG (rede de casa)
+Documentation=file:///usr/share/doc/rpgplay-server/README
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rpgplay
+Group=rpgplay
+EnvironmentFile=/etc/rpgplay/server.env
+WorkingDirectory=/var/lib/rpgplay
+ExecStart=/opt/rpgplay-server/rpgplay-server serve
+Restart=on-failure
+RestartSec=3
+UMask=0027
+
+# Endurecimento: o servidor só escreve no diretório de dados.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rpgplay
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

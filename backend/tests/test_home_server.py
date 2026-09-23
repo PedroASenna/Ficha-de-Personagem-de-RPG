@@ -124,6 +124,27 @@ def test_cli_reset_password_backup_and_purge(tmp_path, monkeypatch, capsys):
         assert server_cli(["backup", str(backup)]) == 0
         with tarfile.open(backup) as tar:
             assert "rpgplay.db" in tar.getnames()
+
+        # Depois do backup alguém cria conta; restaurar volta ao estado do backup e guarda o atual.
+        with TestClient(create_app(load_settings())) as c:
+            register(c, "Depois", "depois")
+        assert server_cli(["restore", str(backup)]) == 0
+        with TestClient(create_app(load_settings())) as c:
+            gone = c.post(f"{API}/auth/login", json={"username": "depois", "password": "senha-secreta"})
+            assert gone.status_code == 401
+            assert (
+                c.post(f"{API}/auth/login", json={"username": "dono", "password": "senha-nova-123"}).status_code == 200
+            )
+        assert len(list(data_dir.glob("antes-da-restauracao-*/rpgplay.db"))) == 1
+
+        # Backup malicioso (caminho para fora da pasta) é recusado sem tocar nos dados.
+        evil = tmp_path / "evil.tar.gz"
+        with tarfile.open(evil, "w:gz") as tar:
+            payload = tmp_path / "x"
+            payload.write_text("x")
+            tar.add(payload, arcname="../../fora.txt")
+        assert server_cli(["restore", str(evil)]) == 1
+        assert not (tmp_path / "fora.txt").exists()
         assert server_cli(["purge"]) == 0
         assert "Expurgo concluído" in capsys.readouterr().out
         assert settings.sqlalchemy_url.startswith("sqlite")
