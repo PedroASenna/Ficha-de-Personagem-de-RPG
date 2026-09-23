@@ -10,7 +10,7 @@ from app.models.enums import RoomRole, RoomStatus, SessionEventType, Visibility,
 
 
 class Room(TimestampMixin, Base):
-    """Sala do Mestre. O sistema de regras é fixado na criação."""
+    """Mesa/campanha do Mestre. O sistema de regras é fixado na criação e a mesa não expira."""
 
     __tablename__ = "rooms"
     __table_args__ = (
@@ -31,8 +31,9 @@ class Room(TimestampMixin, Base):
     ruleset_id: Mapped[str] = mapped_column(ForeignKey("rulesets.id"))
     status: Mapped[RoomStatus] = mapped_column(str_enum(RoomStatus), default=RoomStatus.OPEN)
     max_players: Mapped[int] = mapped_column(default=8)
+    # Campanha persistente: "closed" = arquivada (o Mestre reabre quando quiser).
     closed_at: Mapped[datetime | None]
-    expires_at: Mapped[datetime | None]
+    last_activity_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class RoomMember(Base):

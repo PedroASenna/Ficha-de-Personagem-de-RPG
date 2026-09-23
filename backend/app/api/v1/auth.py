@@ -1,11 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AppState, get_db, get_state
+from app.api.deps import AppState, get_current_user, get_db, get_state
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -14,7 +14,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import RefreshToken, User
-from app.schemas.auth import LoginIn, RefreshIn, RegisterIn, TokenOut
+from app.schemas.auth import LoginIn, PasswordChangeIn, RefreshIn, RegisterIn, TokenOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -38,23 +38,23 @@ async def _issue_tokens(db: AsyncSession, state: AppState, user: User) -> TokenO
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
 async def register(data: RegisterIn, db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)):
-    now = datetime.now(UTC)
+    active_users = await db.scalar(select(func.count()).select_from(User).where(User.deleted_at.is_(None)))
+    # O primeiro cadastro sempre é permitido (é o dono do servidor) e vira admin.
+    if active_users and not state.settings.allow_registration:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cadastro fechado neste servidor. Peça ao admin.")
     user = User(
-        email=data.email,
+        username=data.username,
         password_hash=hash_password(data.password),
         display_name=data.display_name,
         locale=data.locale,
-        age_gate_confirmed_at=now,
-        terms_version=state.settings.terms_version,
-        privacy_version=state.settings.privacy_version,
-        consent_at=now,
+        is_admin=active_users == 0,
     )
     db.add(user)
     try:
         await db.flush()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe uma conta com este e-mail.") from None
+        raise HTTPException(status.HTTP_409_CONFLICT, "Esse nome de usuário já existe.") from None
     return await _issue_tokens(db, state, user)
 
 
@@ -63,12 +63,22 @@ async def login(
     data: LoginIn, request: Request, db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)
 ):
     client = request.client.host if request.client else "?"
-    if not state.limiters.login.allow(f"login:{client}:{data.email}"):
+    if not state.limiters.login.allow(f"login:{client}:{data.username}"):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde um minuto.")
-    user = await db.scalar(select(User).where(User.email == data.email, User.deleted_at.is_(None)))
+    user = await db.scalar(select(User).where(User.username == data.username, User.deleted_at.is_(None)))
     if user is None or not verify_password(user.password_hash, data.password):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-mail ou senha incorretos.")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário ou senha incorretos.")
     return await _issue_tokens(db, state, user)
+
+
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    data: PasswordChangeIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    if not verify_password(user.password_hash, data.current_password):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Senha atual incorreta.")
+    user.password_hash = hash_password(data.new_password)
+    await db.commit()
 
 
 @router.post("/refresh", response_model=TokenOut)

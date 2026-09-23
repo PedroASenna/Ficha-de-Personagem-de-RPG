@@ -34,15 +34,14 @@ def _reset_postgres(url: str) -> None:
 def settings(tmp_path) -> Settings:
     if PG_URL:
         _reset_postgres(PG_URL)
-        url = PG_URL
-    else:
-        url = f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
     return Settings(
         env="test",
-        database_url=url,
+        data_dir=str(tmp_path / "data"),
+        database_url=PG_URL,  # None = SQLite em data_dir
         db_auto_create=True,
-        media_local_dir=str(tmp_path / "media"),
+        discovery_enabled=False,
         ws_auth_timeout_seconds=1.0,
+        server_name="Mesa de Teste",
     )
 
 
@@ -52,21 +51,17 @@ def client(settings):
         yield test_client
 
 
-def register(client: TestClient, name: str = "Aria", email: str | None = None) -> dict:
-    email = email or f"{name.lower()}-{uuid.uuid4().hex[:6]}@example.com"
+def register(
+    client: TestClient, name: str = "Aria", username: str | None = None, password: str = "senha-secreta"
+) -> dict:
+    username = username or f"{name.lower()}_{uuid.uuid4().hex[:6]}"
     response = client.post(
         "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": "senha-super-secreta",
-            "display_name": name,
-            "age_confirmed": True,
-            "accept_terms": True,
-        },
+        json={"username": username, "password": password, "display_name": name},
     )
     assert response.status_code == 201, response.text
     tokens = response.json()
-    return {"email": email, "token": tokens["access_token"], "refresh": tokens["refresh_token"]}
+    return {"username": username, "token": tokens["access_token"], "refresh": tokens["refresh_token"]}
 
 
 def auth(user: dict) -> dict:

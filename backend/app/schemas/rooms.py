@@ -61,6 +61,7 @@ class RoomOut(BaseModel):
     my_role: RoomRole
     members: list[RoomMemberOut]
     created_at: datetime
+    last_activity_at: datetime | None = None
 
 
 class EventOut(BaseModel):

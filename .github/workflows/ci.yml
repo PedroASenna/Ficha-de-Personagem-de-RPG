@@ -38,15 +38,29 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: black --check .
-      - name: Migrações (upgrade, check de drift, downgrade e upgrade de novo)
+      - name: Migrações no SQLite (modo casa, padrão do .deb)
+        env:
+          RPG_DATABASE_URL: ""
+          RPG_DATA_DIR: /tmp/rpgplay-ci
         run: |
           alembic upgrade head
           alembic check
           alembic downgrade base
           alembic upgrade head
+      - name: Migrações no Postgres (upgrade, check de drift, downgrade e upgrade de novo)
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
+      - name: Testes no SQLite
+        env:
+          RPG_TEST_DATABASE_URL: ""
+        run: pytest -q
       - name: Banco de teste
         run: PGPASSWORD=rpg psql -h localhost -U rpg -d rpg -c "CREATE DATABASE rpg_test"
-      - run: pytest -q
+      - name: Testes no Postgres
+        run: pytest -q
 
   mobile:
     runs-on: ubuntu-latest

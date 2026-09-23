@@ -1,5 +1,4 @@
 import io
-from pathlib import Path
 
 from PIL import Image
 
@@ -13,25 +12,17 @@ def test_health(client):
 
 
 def test_register_login_refresh_logout(client):
-    user = register(client, "Aria", "aria@example.com")
-    assert client.get(f"{API}/me", headers=auth(user)).json()["display_name"] == "Aria"
+    user = register(client, "Aria", "aria")
+    me = client.get(f"{API}/me", headers=auth(user)).json()
+    assert me["display_name"] == "Aria" and me["username"] == "aria"
 
     dup = client.post(
-        f"{API}/auth/register",
-        json={
-            "email": "ARIA@example.com",
-            "password": "outra-senha-longa",
-            "display_name": "Outra",
-            "age_confirmed": True,
-            "accept_terms": True,
-        },
+        f"{API}/auth/register", json={"username": "ARIA", "password": "outra-senha", "display_name": "Outra"}
     )
     assert dup.status_code == 409
 
-    assert (
-        client.post(f"{API}/auth/login", json={"email": "aria@example.com", "password": "errada"}).status_code == 401
-    )
-    login = client.post(f"{API}/auth/login", json={"email": "aria@example.com", "password": "senha-super-secreta"})
+    assert client.post(f"{API}/auth/login", json={"username": "aria", "password": "errada"}).status_code == 401
+    login = client.post(f"{API}/auth/login", json={"username": " Aria ", "password": "senha-secreta"})
     assert login.status_code == 200
 
     refreshed = client.post(f"{API}/auth/refresh", json={"refresh_token": user["refresh"]})
@@ -44,16 +35,61 @@ def test_register_login_refresh_logout(client):
     assert client.post(f"{API}/auth/refresh", json={"refresh_token": new_refresh}).status_code == 401
 
 
-def test_register_requires_age_gate_and_terms(client):
-    base = {"email": "kid@example.com", "password": "senha-super-secreta", "display_name": "Kid"}
+def test_username_rules(client):
+    for bad in ("ab", "com espaço", "ação", "x" * 33):
+        r = client.post(
+            f"{API}/auth/register", json={"username": bad, "password": "senha-secreta", "display_name": "X"}
+        )
+        assert r.status_code == 422, bad
+
+
+def test_first_user_is_admin_and_can_reset_passwords(client):
+    owner = register(client, "Dono", "dono")
+    player = register(client, "Jogador", "jogador")
+    assert client.get(f"{API}/me", headers=auth(owner)).json()["is_admin"] is True
+    assert client.get(f"{API}/me", headers=auth(player)).json()["is_admin"] is False
+
+    assert client.get(f"{API}/admin/users", headers=auth(player)).status_code == 403
+    users = client.get(f"{API}/admin/users", headers=auth(owner)).json()
+    assert [u["username"] for u in users] == ["dono", "jogador"]
+
+    r = client.post(f"{API}/admin/users/jogador/password", json={"new_password": "nova-senha-1"}, headers=auth(owner))
+    assert r.status_code == 204
+    # Sessões antigas caem e a senha nova funciona.
+    assert client.post(f"{API}/auth/refresh", json={"refresh_token": player["refresh"]}).status_code == 401
     assert (
-        client.post(f"{API}/auth/register", json={**base, "age_confirmed": False, "accept_terms": True}).status_code
-        == 422
+        client.post(f"{API}/auth/login", json={"username": "jogador", "password": "nova-senha-1"}).status_code == 200
     )
-    assert (
-        client.post(f"{API}/auth/register", json={**base, "age_confirmed": True, "accept_terms": False}).status_code
-        == 422
+
+
+def test_change_own_password(client):
+    user = register(client, "Bia", "bia")
+    wrong = client.post(
+        f"{API}/auth/password", json={"current_password": "x", "new_password": "outra-senha"}, headers=auth(user)
     )
+    assert wrong.status_code == 403
+    ok = client.post(
+        f"{API}/auth/password",
+        json={"current_password": "senha-secreta", "new_password": "outra-senha"},
+        headers=auth(user),
+    )
+    assert ok.status_code == 204
+    assert client.post(f"{API}/auth/login", json={"username": "bia", "password": "outra-senha"}).status_code == 200
+
+
+def test_registration_can_be_closed_after_owner(settings):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    closed = settings.model_copy(update={"allow_registration": False})
+    with TestClient(create_app(closed)) as c:
+        register(c, "Dono", "dono")  # o primeiro cadastro sempre passa (dono do servidor)
+        r = c.post(
+            f"{API}/auth/register", json={"username": "outro", "password": "senha-secreta", "display_name": "Outro"}
+        )
+        assert r.status_code == 403
+        assert c.get(f"{API}/discovery").json()["registration_open"] is False
 
 
 def test_requires_auth(client):
@@ -253,7 +289,7 @@ def test_portrait_upload_strips_metadata(client, settings):
         headers=auth(user),
     )
     assert r.status_code == 201, r.text
-    stored = Path(settings.media_local_dir) / r.json()["portrait_key"]
+    stored = settings.media_path / r.json()["portrait_key"]
     with Image.open(stored) as saved:
         assert saved.size == (512, 512)
         assert not saved.getexif()
@@ -266,18 +302,18 @@ def test_portrait_upload_strips_metadata(client, settings):
 
 
 def test_export_and_delete_account(client):
-    user = register(client, "Saida", "saida@example.com")
+    user = register(client, "Saida", "saida")
     h = auth(user)
     quick_character(client, user)
     export = client.get(f"{API}/me/export", headers=h).json()
-    assert export["user"]["email"] == "saida@example.com" and len(export["characters"]) == 1
+    assert export["user"]["username"] == "saida" and len(export["characters"]) == 1
 
     assert client.delete(f"{API}/me", headers=h).status_code == 204
     assert client.get(f"{API}/me", headers=h).status_code == 401
-    login = client.post(f"{API}/auth/login", json={"email": "saida@example.com", "password": "senha-super-secreta"})
+    login = client.post(f"{API}/auth/login", json={"username": "saida", "password": "senha-secreta"})
     assert login.status_code == 401
-    # O e-mail fica livre para uma conta nova.
-    register(client, "Volta", "saida@example.com")
+    # O nome de usuário fica livre para uma conta nova.
+    register(client, "Volta", "saida")
 
 
 def test_reports_and_blocks(client):

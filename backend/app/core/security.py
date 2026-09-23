@@ -17,6 +17,12 @@ class InvalidTokenError(Exception):
     pass
 
 
+def _secret(settings: Settings) -> str:
+    if settings.jwt_secret is None:
+        raise RuntimeError("Segredo JWT não resolvido (use ensure_runtime_secrets)")
+    return settings.jwt_secret.get_secret_value()
+
+
 def hash_password(password: str) -> str:
     return _hasher.hash(password)
 
@@ -36,12 +42,12 @@ def create_access_token(settings: Settings, user_id: uuid.UUID) -> str:
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_access_ttl_minutes),
     }
-    return jwt.encode(payload, settings.jwt_secret.get_secret_value(), algorithm=_ALGORITHM)
+    return jwt.encode(payload, _secret(settings), algorithm=_ALGORITHM)
 
 
 def decode_access_token(settings: Settings, token: str) -> uuid.UUID:
     try:
-        payload = jwt.decode(token, settings.jwt_secret.get_secret_value(), algorithms=[_ALGORITHM])
+        payload = jwt.decode(token, _secret(settings), algorithms=[_ALGORITHM])
     except jwt.PyJWTError as exc:
         raise InvalidTokenError(str(exc)) from exc
     if payload.get("type") != "access":

@@ -12,12 +12,15 @@ from sqlalchemy import select
 from app.api.deps import AppState
 from app.core.errors import DomainError, ForbiddenError, NotFoundError, RateLimitedError
 from app.core.security import InvalidTokenError, decode_access_token
-from app.models import Character, RoomMember, User
+from app.models import Character, Npc, Room, RoomMember, Token, User
 from app.models.enums import RoomRole, Visibility
 from app.schemas.rooms import EventOut
 from app.services import characters as character_service
 from app.services import dice
 from app.services import rooms as room_service
+from app.services import table as table_service
+from app.services.hp import apply_hp
+from app.ws import table_events
 from app.ws.events import announce_hp_change, announce_roll, roll_summary, rooms_with_character
 from app.ws.manager import Connection
 from app.ws.protocol import (
@@ -28,6 +31,7 @@ from app.ws.protocol import (
     HpChangeMsg,
     PingMsg,
     RollRequestMsg,
+    TokenMoveMsg,
     client_message_adapter,
     error_message,
     server_message,
@@ -90,10 +94,12 @@ async def room_socket(websocket: WebSocket, pin: str) -> None:
         online = manager.online_user_ids(room.id) | {user.id}
         room_view = await room_service.room_out(session, room, user.id, state.registry, state.media, online)
         events = await room_service.list_events(session, room, member, limit=50)
+        table = await table_service.table_view(session, room, member, state.media)
         welcome = server_message(
             "welcome",
             room=room_view.model_dump(mode="json"),
             log=[EventOut.model_validate(e).model_dump(mode="json") for e in events],
+            table=table,
         )
 
     conn = Connection(websocket=websocket, user_id=ctx.user_id, role=ctx.role)
@@ -131,6 +137,8 @@ async def _dispatch(state: AppState, ctx: RoomContext, websocket: WebSocket, tex
             await _handle_roll(state, ctx, msg)
         elif isinstance(msg, HpChangeMsg):
             await _handle_hp(state, ctx, msg)
+        elif isinstance(msg, TokenMoveMsg):
+            await _handle_token_move(state, ctx, msg)
     except (json.JSONDecodeError, ValidationError):
         await websocket.send_json(error_message("bad_request", "Mensagem inválida.", ref))
     except dice.NotationError as exc:
@@ -165,10 +173,14 @@ async def _handle_roll(state: AppState, ctx: RoomContext, msg: RollRequestMsg) -
     expression = dice.parse(msg.notation)
     async with state.db.sessionmaker() as session:
         character = None
+        npc = None
         if msg.character_id:
             character = await _room_character(session, ctx, msg.character_id)
             if character.owner_id != ctx.user_id and ctx.role != RoomRole.MASTER:
                 raise ForbiddenError("Você só pode rolar pelo seu personagem.")
+        elif msg.npc_id:
+            npc = await _room_npc(session, ctx, msg.npc_id)
+        roller = character.name if character else npc.name if npc else None
         result = dice.roll(expression)
         outcome = dice.classify(result, state.registry.outcome_rules(ctx.ruleset_id))
         payload = {
@@ -178,9 +190,10 @@ async def _handle_roll(state: AppState, ctx: RoomContext, msg: RollRequestMsg) -
             "outcome": outcome.to_dict(),
             "actor": {"user_id": str(ctx.user_id), "display_name": ctx.display_name},
             "character": {"id": str(character.id), "name": character.name} if character else None,
+            "npc": {"id": str(npc.id), "name": npc.name} if npc else None,
             "summary": roll_summary(
                 ctx.display_name,
-                character.name if character else None,
+                roller,
                 msg.label,
                 result.expression.canonical(),
                 result.total,
@@ -203,6 +216,12 @@ async def _handle_hp(state: AppState, ctx: RoomContext, msg: HpChangeMsg) -> Non
     if not state.limiters.hp.allow(f"hp:{ctx.user_id}"):
         raise RateLimitedError("Muitas alterações de PV seguidas.")
     async with state.db.sessionmaker() as session:
+        if msg.npc_id:
+            npc = await _room_npc(session, ctx, msg.npc_id)
+            room = await session.get(Room, ctx.room_id)
+            transition = apply_hp(npc, msg.delta, msg.kind, msg.expected_version)
+            await table_events.npc_hp_changed(state, session, room, npc, transition, ctx.user_id, ctx.display_name)
+            return
         character = await _room_character(session, ctx, msg.character_id)
         # Jogador altera o próprio personagem; o Mestre altera qualquer um da mesa.
         if character.owner_id != ctx.user_id and ctx.role != RoomRole.MASTER:
@@ -223,3 +242,29 @@ async def _handle_hp(state: AppState, ctx: RoomContext, msg: HpChangeMsg) -> Non
 async def _rooms_for(session, character_id: uuid.UUID, current_room: uuid.UUID) -> list[uuid.UUID]:
     ids = [r.id for r in await rooms_with_character(session, character_id)]
     return ids if current_room in ids else [current_room, *ids]
+
+
+async def _room_npc(session, ctx: RoomContext, npc_id: uuid.UUID) -> Npc:
+    """Inimigos são do Mestre: jogadores não rolam nem mexem nos PV deles."""
+    if ctx.role != RoomRole.MASTER:
+        raise ForbiddenError("Só o Mestre controla os inimigos.")
+    npc = await session.get(Npc, npc_id)
+    if npc is None or npc.room_id != ctx.room_id:
+        raise NotFoundError("Inimigo não está nesta mesa.")
+    return npc
+
+
+async def _handle_token_move(state: AppState, ctx: RoomContext, msg: TokenMoveMsg) -> None:
+    if ctx.role != RoomRole.MASTER:
+        raise ForbiddenError("Só o Mestre move os bonecos.")
+    if not state.limiters.table.allow(f"table:{ctx.user_id}"):
+        return  # arrasto rápido demais: descarta este quadro; o próximo (ou o "soltar") corrige
+    async with state.db.sessionmaker() as session:
+        token = await session.get(Token, msg.token_id)
+        if token is None or token.room_id != ctx.room_id:
+            raise NotFoundError("Boneco não encontrado.")
+        token.x, token.y = msg.x, msg.y
+        token.version += 1
+        await session.commit()
+        room = await session.get(Room, ctx.room_id)
+        await table_events.token_moved(state, session, room, token)

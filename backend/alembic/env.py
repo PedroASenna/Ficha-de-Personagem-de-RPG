@@ -15,9 +15,15 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _settings():
+    # O `rpgplay-server serve` passa as configurações já resolvidas; o CLI `alembic` lê do ambiente.
+    return config.attributes.get("settings") or get_settings()
+
+
 def run_migrations_offline() -> None:
     context.configure(
-        url=get_settings().database_url,
+        url=_settings().sqlalchemy_url,
+        render_as_batch=True,
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
@@ -27,13 +33,16 @@ def run_migrations_offline() -> None:
 
 
 def _run(connection) -> None:  # noqa: ANN001
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    # render_as_batch: o SQLite (servidor da casa) não tem ALTER TABLE completo; o Alembic recria a tabela.
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True, render_as_batch=True)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(get_settings().database_url)
+    settings = _settings()
+    settings.data_path.mkdir(parents=True, exist_ok=True)
+    engine = create_async_engine(settings.sqlalchemy_url)
     async with engine.connect() as connection:
         await connection.run_sync(_run)
     await engine.dispose()

@@ -25,6 +25,7 @@ from app.schemas.characters import (
 )
 from app.services import character_rules as rules
 from app.services.character_rules import CUSTOM_KEY
+from app.services.hp import apply_hp
 from app.services.media import MediaStore
 
 _rng = secrets.SystemRandom()
@@ -241,35 +242,7 @@ def quick_create(
 def apply_hp_change(character: Character, delta: int, kind: str, expected_version: int | None) -> dict[str, Any]:
     if character.status != CharacterStatus.COMPLETE:
         raise DomainError("Conclua o personagem antes de usar o HUD de combate.")
-    if expected_version is not None and expected_version != character.version:
-        raise ConflictError("A ficha mudou em outro aparelho. Recarregue e tente de novo.")
-    before = character.hp_current
-    absorbed = 0
-    if kind == "damage":
-        absorbed = min(character.hp_temp, delta)
-        character.hp_temp -= absorbed
-        character.hp_current = max(0, character.hp_current - (delta - absorbed))
-        effect = "bleed" if character.hp_current < before else "shield_hit"
-    elif kind == "heal":
-        character.hp_current = min(character.hp_max, character.hp_current + delta)
-        effect = "heal_glow"
-    else:
-        # PV temporário não acumula: fica o maior valor.
-        character.hp_temp = max(character.hp_temp, delta)
-        effect = "shield_up"
-    character.version += 1
-    return {
-        "character_id": character.id,
-        "kind": kind,
-        "delta": delta,
-        "hp_before": before,
-        "hp_current": character.hp_current,
-        "hp_max": character.hp_max,
-        "hp_temp": character.hp_temp,
-        "absorbed_by_temp": absorbed,
-        "effect": effect,
-        "version": character.version,
-    }
+    return {"character_id": character.id, **apply_hp(character, delta, kind, expected_version)}
 
 
 def rest(character: Character, rest_type: str) -> None:

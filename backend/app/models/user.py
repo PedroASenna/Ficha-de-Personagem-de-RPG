@@ -8,18 +8,18 @@ from app.db.base import Base, TimestampMixin
 
 
 class User(TimestampMixin, Base):
+    """Conta local do servidor da casa (usuário + senha; e-mail é opcional)."""
+
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str] = mapped_column(String(40))
     locale: Mapped[str] = mapped_column(String(10), default="pt-BR")
-    # Minimização (LGPD): guardamos só a confirmação de idade mínima, nunca a data de nascimento.
-    age_gate_confirmed_at: Mapped[datetime]
-    terms_version: Mapped[str] = mapped_column(String(20))
-    privacy_version: Mapped[str] = mapped_column(String(20))
-    consent_at: Mapped[datetime]
+    # O primeiro usuário do servidor vira admin: pode redefinir senhas (não há e-mail de recuperação).
+    is_admin: Mapped[bool] = mapped_column(default=False)
     # Conta excluída: dados pessoais anonimizados na hora; a linha é expurgada depois (account_purge_days).
     deleted_at: Mapped[datetime | None]
 

@@ -1,8 +1,8 @@
-"""Salas do Mestre: criação com sistema de regras, entrada por PIN, log da sessão."""
+"""Mesas (campanhas) do Mestre: criação com sistema de regras, entrada por PIN, log, arquivar/reabrir."""
 
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -19,7 +19,6 @@ from app.services.media import MediaStore
 # Sem 0/O, 1/I: o PIN é ditado em voz alta na mesa.
 PIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PIN_LENGTH = 6
-ROOM_TTL = timedelta(hours=24)
 
 
 def new_pin() -> str:
@@ -40,7 +39,6 @@ async def create_room(
             ruleset_id=ruleset_id,
             max_players=max_players,
             status=RoomStatus.OPEN,
-            expires_at=datetime.now(UTC) + ROOM_TTL,
         )
         session.add(room)
         try:
@@ -56,7 +54,7 @@ async def create_room(
 
 async def get_open_room_by_pin(session: AsyncSession, pin: str) -> Room:
     room = await session.scalar(select(Room).where(Room.pin == pin.upper(), Room.status == RoomStatus.OPEN))
-    if room is None or (room.expires_at and _aware(room.expires_at) < datetime.now(UTC)):
+    if room is None:
         raise NotFoundError("Sala não encontrada. Confira o PIN.")
     return room
 
@@ -131,6 +129,9 @@ async def record_event(
     character_id: uuid.UUID | None = None,
     visibility: Visibility = Visibility.PUBLIC,
 ) -> SessionEvent:
+    room = await session.get(Room, room_id)
+    if room is not None:
+        room.last_activity_at = datetime.now(UTC)
     event = SessionEvent(
         room_id=room_id,
         actor_user_id=actor_id,
@@ -159,11 +160,34 @@ async def list_events(
 
 
 async def close_room(session: AsyncSession, room: Room, user: User) -> None:
+    """Arquiva a mesa: tudo fica salvo (cenas, inimigos, log) e o Mestre pode reabrir depois."""
     if room.master_id != user.id:
-        raise ForbiddenError("Só o Mestre pode encerrar a sala.")
+        raise ForbiddenError("Só o Mestre pode arquivar a mesa.")
     room.status = RoomStatus.CLOSED
     room.closed_at = datetime.now(UTC)
     await session.commit()
+
+
+async def reopen_room(session: AsyncSession, room: Room, user: User) -> Room:
+    if room.master_id != user.id:
+        raise ForbiddenError("Só o Mestre pode reabrir a mesa.")
+    if room.status == RoomStatus.OPEN:
+        return room
+    # O PIN antigo pode ter sido reaproveitado por outra mesa aberta nesse meio-tempo.
+    for attempt in range(10):
+        taken = await session.scalar(
+            select(Room.id).where(Room.pin == room.pin, Room.status == RoomStatus.OPEN, Room.id != room.id)
+        )
+        if not taken:
+            break
+        room.pin = new_pin()
+        if attempt == 9:
+            raise ConflictError("Não foi possível gerar um PIN. Tente de novo.")
+    room.status = RoomStatus.OPEN
+    room.closed_at = None
+    room.last_activity_at = datetime.now(UTC)
+    await session.commit()
+    return room
 
 
 async def kick(session: AsyncSession, room: Room, master: User, user_id: uuid.UUID) -> None:
@@ -235,9 +259,5 @@ async def room_out(
         my_role=my_role,
         members=members,
         created_at=room.created_at,
+        last_activity_at=room.last_activity_at,
     )
-
-
-def _aware(value: datetime) -> datetime:
-    # SQLite devolve datetime sem fuso; Postgres devolve com fuso.
-    return value if value.tzinfo else value.replace(tzinfo=UTC)

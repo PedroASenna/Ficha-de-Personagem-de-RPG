@@ -11,11 +11,15 @@ class Database:
         kwargs = {} if url.startswith("sqlite") else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
         self.engine: AsyncEngine = create_async_engine(url, **kwargs)
         if url.startswith("sqlite"):
-            # SQLite ignora FKs (e o ON DELETE CASCADE) sem este pragma.
+            # SQLite ignora FKs (e o ON DELETE CASCADE) sem este pragma. WAL + busy_timeout deixam
+            # leituras e escritas concorrentes (vários jogadores ao mesmo tempo) sem "database is locked".
             @event.listens_for(self.engine.sync_engine, "connect")
-            def _enable_fks(dbapi_connection, _record):  # noqa: ANN001
+            def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001
                 cursor = dbapi_connection.cursor()
                 cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
                 cursor.close()
 
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)

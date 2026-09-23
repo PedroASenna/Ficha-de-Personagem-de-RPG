@@ -37,8 +37,8 @@ def upgrade() -> None:
             "pack", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=True
         ),
         sa.Column("content_hash", sa.String(length=64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_rulesets")),
     )
     op.create_table(
@@ -53,8 +53,8 @@ def upgrade() -> None:
         sa.Column("privacy_version", sa.String(length=20), nullable=False),
         sa.Column("consent_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_users")),
     )
     op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
@@ -124,8 +124,8 @@ def upgrade() -> None:
         ),
         sa.Column("notes", sa.Text(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["owner_id"], ["users.id"], name=op.f("fk_characters_owner_id_users"), ondelete="CASCADE"
         ),
@@ -164,7 +164,7 @@ def upgrade() -> None:
             sa.Enum("open", "reviewing", "actioned", "dismissed", name="reportstatus", native_enum=False, length=32),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["reporter_id"], ["users.id"], name=op.f("fk_content_reports_reporter_id_users"), ondelete="SET NULL"
@@ -179,7 +179,7 @@ def upgrade() -> None:
         sa.Column("token_hash", sa.String(length=64), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["user_id"], ["users.id"], name=op.f("fk_refresh_tokens_user_id_users"), ondelete="CASCADE"
         ),
@@ -200,8 +200,8 @@ def upgrade() -> None:
         sa.Column("max_players", sa.Integer(), nullable=False),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["master_id"], ["users.id"], name=op.f("fk_rooms_master_id_users"), ondelete="CASCADE"
         ),
@@ -221,7 +221,7 @@ def upgrade() -> None:
         "user_blocks",
         sa.Column("blocker_id", sa.Uuid(), nullable=False),
         sa.Column("blocked_id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["blocked_id"], ["users.id"], name=op.f("fk_user_blocks_blocked_id_users"), ondelete="CASCADE"
         ),
@@ -243,7 +243,7 @@ def upgrade() -> None:
             sa.Enum("short_rest", "long_rest", "none", name="recharge", native_enum=False, length=32),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["character_id"],
             ["characters.id"],
@@ -261,7 +261,7 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Integer(), nullable=False),
         sa.Column("weight_each", sa.Numeric(precision=8, scale=2), nullable=False),
         sa.Column("equipped", sa.Boolean(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["character_id"],
             ["characters.id"],
@@ -277,7 +277,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("character_id", sa.Uuid(), nullable=True),
         sa.Column("role", sa.Enum("master", "player", name="roomrole", native_enum=False, length=32), nullable=False),
-        sa.Column("joined_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("joined_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("kicked_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["character_id"],
@@ -322,7 +322,7 @@ def upgrade() -> None:
         sa.Column(
             "payload", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=False
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ["actor_user_id"], ["users.id"], name=op.f("fk_session_events_actor_user_id_users"), ondelete="SET NULL"
         ),

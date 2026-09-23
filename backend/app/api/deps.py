@@ -22,6 +22,7 @@ class Limiters:
     roll: RateLimiter
     hp: RateLimiter
     upload: RateLimiter
+    table: RateLimiter
 
 
 @dataclass
@@ -32,6 +33,7 @@ class AppState:
     media: MediaStore
     broadcaster: Broadcaster
     limiters: Limiters
+    server_id: str = ""
 
 
 def get_state(request: Request) -> AppState:
@@ -65,4 +67,10 @@ async def get_current_user(
     user = await db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise unauthorized
+    return user
+
+
+async def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Só o admin do servidor pode fazer isso.")
     return user

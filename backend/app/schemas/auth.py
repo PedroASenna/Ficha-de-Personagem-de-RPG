@@ -1,22 +1,29 @@
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,32}$")
+
+
+def normalize_username(value: str) -> str:
+    value = value.strip().lower()
+    if not USERNAME_RE.match(value):
+        raise ValueError("Use de 3 a 32 caracteres: letras minúsculas, números, ponto, hífen ou _.")
+    return value
 
 
 class RegisterIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=10, max_length=128)
+    username: str = Field(max_length=32)
+    password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=2, max_length=40)
     locale: str = Field(default="pt-BR", max_length=10)
-    # Age gate (13+) e aceite dos termos/política: obrigatórios para Play Store e LGPD.
-    age_confirmed: bool
-    accept_terms: bool
 
-    @field_validator("email")
+    @field_validator("username")
     @classmethod
-    def _lower(cls, value: str) -> str:
-        return value.lower()
+    def _username(cls, value: str) -> str:
+        return normalize_username(value)
 
     @field_validator("display_name")
     @classmethod
@@ -26,29 +33,15 @@ class RegisterIn(BaseModel):
             raise ValueError("Nome muito curto.")
         return value
 
-    @field_validator("age_confirmed")
-    @classmethod
-    def _age(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("É preciso ter 13 anos ou mais para usar o app.")
-        return value
-
-    @field_validator("accept_terms")
-    @classmethod
-    def _terms(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("É preciso aceitar os Termos de Uso e a Política de Privacidade.")
-        return value
-
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    username: str = Field(max_length=64)
     password: str = Field(max_length=128)
 
-    @field_validator("email")
+    @field_validator("username")
     @classmethod
     def _lower(cls, value: str) -> str:
-        return value.lower()
+        return value.strip().lower()
 
 
 class RefreshIn(BaseModel):
@@ -66,12 +59,32 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    username: str
     display_name: str
     locale: str
+    is_admin: bool
     created_at: datetime
 
 
 class UserPatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=2, max_length=40)
     locale: str | None = Field(default=None, max_length=10)
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class AdminPasswordResetIn(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class DiscoveryOut(BaseModel):
+    app: str = "rpgplay"
+    name: str
+    version: str
+    server_id: str
+    port: int
+    registration_open: bool
+    master_path: str = "/mestre"

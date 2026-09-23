@@ -8,8 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import Settings
-from app.models import Character, RefreshToken, Room, RoomMember, SessionEvent, User, UserBlock
-from app.models.enums import RoomStatus
+from app.models import Character, Npc, RefreshToken, Room, RoomMember, Scene, SessionEvent, User, UserBlock
 from app.services.media import MediaStore
 
 
@@ -32,14 +31,11 @@ async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
         "exported_at": datetime.now(UTC).isoformat(),
         "user": {
             "id": str(user.id),
+            "username": user.username,
             "email": user.email,
             "display_name": user.display_name,
             "locale": user.locale,
             "created_at": iso(user.created_at),
-            "age_gate_confirmed_at": iso(user.age_gate_confirmed_at),
-            "terms_version": user.terms_version,
-            "privacy_version": user.privacy_version,
-            "consent_at": iso(user.consent_at),
         },
         "characters": [
             {
@@ -77,6 +73,13 @@ async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
     }
 
 
+async def delete_room_media(session: AsyncSession, room_id, media: MediaStore) -> None:  # noqa: ANN001
+    keys = [k for k in (await session.scalars(select(Scene.map_key).where(Scene.room_id == room_id))).all() if k]
+    keys += [k for k in (await session.scalars(select(Npc.portrait_key).where(Npc.room_id == room_id))).all() if k]
+    for key in set(keys):
+        await media.delete(key)
+
+
 async def delete_account(session: AsyncSession, user: User, media: MediaStore) -> None:
     """Exclusão imediata do conteúdo e anonimização da conta; a linha some no expurgo (purge_deleted)."""
     now = datetime.now(UTC)
@@ -85,11 +88,10 @@ async def delete_account(session: AsyncSession, user: User, media: MediaStore) -
         if character.portrait_key:
             await media.delete(character.portrait_key)
         await session.delete(character)
-    await session.execute(
-        update(Room)
-        .where(Room.master_id == user.id, Room.status == RoomStatus.OPEN)
-        .values(status=RoomStatus.CLOSED, closed_at=now)
-    )
+    # Campanhas mestradas por quem sai são apagadas com mapas e imagens de inimigos.
+    for room in (await session.scalars(select(Room).where(Room.master_id == user.id))).all():
+        await delete_room_media(session, room.id, media)
+        await session.delete(room)
     await session.execute(delete(RoomMember).where(RoomMember.user_id == user.id))
     await session.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
     await session.execute(
@@ -97,15 +99,16 @@ async def delete_account(session: AsyncSession, user: User, media: MediaStore) -
     )
     await session.execute(update(SessionEvent).where(SessionEvent.actor_user_id == user.id).values(actor_user_id=None))
 
-    user.email = f"deleted-{user.id}@invalid.local"
+    user.username = f"excluido-{user.id.hex[:12]}"
+    user.email = None
     user.display_name = "Conta excluída"
     user.password_hash = "!"
     user.deleted_at = now
     await session.commit()
 
 
-async def purge(session: AsyncSession, settings: Settings) -> dict[str, int]:
-    """Rotina de retenção (Cloud Scheduler → `python -m app.cli purge`)."""
+async def purge(session: AsyncSession, settings: Settings, media: MediaStore | None = None) -> dict[str, int]:
+    """Rotina de retenção (`rpgplay-server purge`, agendada pelo timer do systemd)."""
     now = datetime.now(UTC)
     events = await session.execute(
         delete(SessionEvent).where(SessionEvent.created_at < now - timedelta(days=settings.event_retention_days))
@@ -115,10 +118,15 @@ async def purge(session: AsyncSession, settings: Settings) -> dict[str, int]:
             User.deleted_at.is_not(None), User.deleted_at < now - timedelta(days=settings.account_purge_days)
         )
     )
-    rooms = await session.execute(
-        update(Room)
-        .where(Room.status == RoomStatus.OPEN, Room.expires_at.is_not(None), Room.expires_at < now)
-        .values(status=RoomStatus.CLOSED, closed_at=now)
-    )
+    # Campanhas não expiram; só somem depois de muito tempo sem nenhuma atividade.
+    stale = (
+        await session.scalars(
+            select(Room).where(Room.last_activity_at < now - timedelta(days=settings.room_retention_days))
+        )
+    ).all()
+    for room in stale:
+        if media is not None:
+            await delete_room_media(session, room.id, media)
+        await session.delete(room)
     await session.commit()
-    return {"events": events.rowcount or 0, "users": users.rowcount or 0, "rooms_closed": rooms.rowcount or 0}
+    return {"events": events.rowcount or 0, "users": users.rowcount or 0, "rooms_deleted": len(stale)}

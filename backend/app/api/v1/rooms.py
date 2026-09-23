@@ -41,13 +41,20 @@ async def create_room(
 
 @router.get("", response_model=list[RoomOut])
 async def my_rooms(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)
+    include_archived: bool = Query(default=False),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
 ):
+    """Mesas abertas em que participo; com include_archived, também as campanhas arquivadas que mestro."""
+    visible = Room.status == RoomStatus.OPEN
+    if include_archived:
+        visible = visible | (Room.master_id == user.id)
     rooms = await db.scalars(
         select(Room)
         .join(RoomMember, RoomMember.room_id == Room.id)
-        .where(RoomMember.user_id == user.id, RoomMember.kicked_at.is_(None), Room.status == RoomStatus.OPEN)
-        .order_by(Room.created_at.desc())
+        .where(RoomMember.user_id == user.id, RoomMember.kicked_at.is_(None), visible)
+        .order_by(Room.last_activity_at.desc())
     )
     return [await _view(db, state, room, user) for room in rooms.all()]
 
@@ -128,3 +135,15 @@ async def close_room(
     room = await _room(db, room_id)
     await service.close_room(db, room, user)
     await state.broadcaster.publish(room.id, server_message("room.closed"))
+
+
+@router.post("/{room_id}/reopen", response_model=RoomOut)
+async def reopen_room(
+    room_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    """Reabre uma campanha arquivada (o PIN muda se outra mesa aberta estiver usando o antigo)."""
+    room = await service.reopen_room(db, await _room(db, room_id), user)
+    return await _view(db, state, room, user)

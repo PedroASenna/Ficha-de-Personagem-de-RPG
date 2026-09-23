@@ -43,6 +43,32 @@ def process_portrait(data: bytes) -> bytes:
         raise InvalidImageError("Arquivo de imagem inválido.") from exc
 
 
+MAP_MAX_SIDE = 4096
+
+
+def process_map(data: bytes) -> tuple[bytes, int, int]:
+    """Mapa da cena: mantém a proporção, limita o lado maior a 4096 px e reencoda em JPEG sem EXIF."""
+    try:
+        with Image.open(io.BytesIO(data)) as probe:
+            if probe.format not in ALLOWED_FORMATS:
+                raise InvalidImageError("Formato não suportado. Envie JPEG, PNG ou WebP.")
+            if probe.width * probe.height > MAX_SOURCE_PIXELS * 2:
+                raise InvalidImageError("Imagem grande demais.")
+            probe.verify()
+        with Image.open(io.BytesIO(data)) as img:
+            img = ImageOps.exif_transpose(img).convert("RGB")
+            img.thumbnail((MAP_MAX_SIDE, MAP_MAX_SIDE), Image.Resampling.LANCZOS)
+            out = io.BytesIO()
+            img.save(out, format="JPEG", quality=85, optimize=True)
+            return out.getvalue(), img.width, img.height
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        raise InvalidImageError("Arquivo de imagem inválido.") from exc
+
+
+def new_room_media_key(room_id: uuid.UUID, kind: str) -> str:
+    return f"rooms/{room_id}/{kind}/{uuid.uuid4().hex}.jpg"
+
+
 def new_portrait_key(user_id: uuid.UUID) -> str:
     return f"portraits/{user_id}/{uuid.uuid4().hex}.jpg"
 
@@ -106,4 +132,4 @@ class GcsMediaStore:
 def build_media_store(settings: Settings) -> MediaStore:
     if settings.media_backend == "gcs":
         return GcsMediaStore(settings.gcs_bucket or "")
-    return LocalMediaStore(settings.media_local_dir)
+    return LocalMediaStore(str(settings.media_path))
