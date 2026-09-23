@@ -1,5 +1,7 @@
 # Deploy na Google Cloud Platform
 
+> **Referência, não usado na distribuição atual.** O RPG Play hoje é instalado direto (APK, .exe, .deb) com o servidor na rede de casa: veja [INSTALACAO.md](../INSTALACAO.md). Este documento fica para o caso de um dia publicar na nuvem (Google Cloud).
+
 Alvo: **Cloud Run** (API + WebSocket), **Cloud SQL for PostgreSQL 16**, **Memorystore for Redis** (fan-out do WebSocket entre instâncias), **Cloud Storage** (retratos), **Secret Manager**, **Artifact Registry**, com **Cloud Run Jobs + Cloud Scheduler** para migrações e retenção.
 
 > Os comandos abaixo são um roteiro. Ajuste região, nomes e tamanhos, e leve para Terraform quando o ambiente se estabilizar.

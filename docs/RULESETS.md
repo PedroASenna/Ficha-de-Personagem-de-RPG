@@ -2,7 +2,7 @@
 
 O Mestre **escolhe o sistema de regras antes de criar a sala** (`POST /api/v1/rooms {ruleset_id}`), e o sistema fica fixo na sala. Personagens só entram numa mesa do mesmo sistema. O servidor valida (`services/rooms.py::_validate_character`).
 
-Para caber num app publicado na Play Store, a licença do sistema precisa permitir **software** e, idealmente, **uso comercial**. A pesquisa abaixo foi feita em setembro/2026.
+Para caber num app distribuído (mesmo que só como APK para o grupo), a licença do sistema precisa permitir **software** e, idealmente, **uso comercial**, para o projeto poder crescer sem reescrever o conteúdo. A pesquisa abaixo foi feita em setembro/2026.
 
 > ⚖️ Isto é um levantamento técnico, não parecer jurídico. Antes de publicar, confirme cada licença com um advogado.
 

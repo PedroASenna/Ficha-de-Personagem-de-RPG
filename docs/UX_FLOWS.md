@@ -2,26 +2,29 @@
 
 Princípio do produto: **um personagem jogável em menos de 1 minuto** e, para quem quer detalhe, um wizard que nunca obriga a abrir o livro de regras.
 
-## Mapa de navegação
+## Mapa de navegação (app dos jogadores)
 
 ```mermaid
 flowchart TD
-  Login["Login / Criar conta<br/>age gate 13+ · termos"] --> Tabs
+  Server["Encontrar servidor<br/>varredura do Wi-Fi · IP digitado · QR code"] --> Login["Entrar / Criar conta<br/>usuário + senha do servidor"]
+  QR["QR code do Mestre<br/>rpgplay://join?server&pin"] --> Server
+  Login --> Tabs
   subgraph Tabs["Abas (Material 3 bottom navigation)"]
     Chars["Personagens"]
     Dice["Dados"]
     Rooms["Mesas"]
     Account["Conta"]
   end
+  Login -- "veio do QR code" --> Room
   Chars -- "⚡ Criação expressa (1 toque)" --> HUD["Ficha / HUD de combate"]
   Chars -- "Passo a passo" --> Wizard
-  Chars -- "rascunho" --> Wizard
   Wizard --> HUD
-  Rooms -- "PIN" --> Room["Mesa"]
-  Rooms -- "Sou o Mestre" --> Create["Escolher sistema de regras → nome"] --> Room
+  Rooms -- "PIN ou QR code" --> Room["Mesa: aba Mesa | aba Mapa"]
   Room -- "sem personagem compatível" --> Wizard
-  Account --> Export["Exportar dados"] & Delete["Excluir conta"] & Licenses["Licenças"]
+  Account --> Pass["Trocar senha"] & Switch["Trocar servidor"] & Export["Exportar dados"] & Delete["Excluir conta"]
 ```
+
+O Mestre usa o **painel do Mestre** no PC (programa RPG Play Mestre ou navegador em `/mestre`): login → lista de mesas → mesa virtual.
 
 ## A. Criação de personagem
 
@@ -69,15 +72,35 @@ Dois caminhos, porque o problema é lentidão:
 
 ## D. Mesa sincronizada
 
-- **Mestre**: Mesas → "Sou o Mestre" → escolhe o **sistema de regras** num card com badge de licença (os indisponíveis aparecem cinza, com o motivo) → dá um nome → recebe o **PIN** (6 caracteres sem 0/O/1/I, para ditar em voz alta).
-- **Jogador**: digita o PIN e escolhe um personagem **do mesmo sistema**. Se não tiver, o botão "Criar um agora" abre o wizard já com o sistema da mesa.
-- **Tela da mesa**: grupo com a mini barra de HP de cada personagem e status online, rolagem compartilhada (com opção "só o Mestre vê") e log da sessão.
-- **Notificações do Mestre**: cada rolagem e cada dano/cura dos jogadores gera uma notificação em tempo real (Snackbar) e uma linha colorida no log. Críticos também vibram o aparelho do Mestre.
-- **Moderação**: menu de cada jogador com Denunciar e Bloquear, mais Remover da mesa (só o Mestre).
-- **Conexão instável**: um banner "Reconectando…" aparece e o app reconecta sozinho.
+- **Mestre (PC):** Nova mesa → escolhe o **sistema de regras** (fica fixo na campanha) e o nome → recebe o **PIN** (6 caracteres sem 0/O/1/I, para ditar em voz alta) e o **QR code** em "Conectar celulares".
+- **Jogador:** lê o QR code (configura o servidor e entra na mesa depois do login) ou digita o PIN, e escolhe um personagem **do mesmo sistema**. Sem personagem compatível, "Criar um agora" abre o wizard já com o sistema da mesa.
+- **Aba Mesa (celular):** grupo com a mini barra de PV de cada personagem e status online, rolagem compartilhada (com opção "só o Mestre vê") e log da sessão.
+- **Tudo ao vivo no painel do Mestre:** rolagens (a última aparece grande, com a cor do resultado), dano e cura no log e nas barras de PV, e quem está conectado.
+- **Campanhas:** nada expira. "Arquivar" guarda a mesa, e "Reabrir campanha" volta com cenas, inimigos e log.
+- **Conexão instável:** aviso "Reconectando…" e reconexão automática, com o estado atual reenviado.
+
+## E. Mesa virtual (painel do Mestre)
+
+Layout em três colunas, pensado para monitor de PC:
+
+| Esquerda | Centro | Direita |
+|---|---|---|
+| **Grupo** (personagens, PV, online, em que cena está) e **Inimigos** (PV, CA, estado). Arrastar para o mapa ou botão "colocar nesta cena". "Novo inimigo" com imagem, PV, CA, atributos do sistema da mesa, notas e quantidade | **Abas de cenas** e **mapa** (Konva): roda do mouse = zoom no cursor, arrastar o fundo = mover, arrastar boneco = mover com encaixe na grade (Alt solta livre), botão direito = esconder/mostrar, trazer para a frente, tamanho (½ a 4 casas), mover para outra cena, tirar do mapa. Soltar um arquivo de imagem no mapa troca o mapa da cena | **Detalhes ao vivo** do boneco selecionado: ficha do personagem (atributos clicáveis para rolar, magias com usos, inventário e carga, condições, anotações), PV grande com Dano/Cura/Temp. Nos inimigos: CA, "Jogadores veem: Ferido", rolagens **secretas** por padrão, editar e apagar. Abaixo: **log da sessão** e **rolador** (d4…d100, notação livre, secreta) |
+
+- **Bonecos:** redondos, com retrato, **anel** (verde-água = grupo, vermelho = inimigo), **arco de PV** em volta (verde → âmbar → vermelho) e nome. Escondidos ficam translúcidos, com anel tracejado e "(escondido)".
+- **Grupo separado:** "Nova cena", depois botão direito no boneco → "Mover para a cena", ou "Trazer o grupo todo para esta cena". O número na aba mostra quantos personagens estão em cada cena.
+- **Contas:** o admin redefine senhas pelo ícone de contas na lista de mesas (não há e-mail de recuperação).
+
+## F. Mapa do jogador (celular)
+
+- Aba **Mapa** dentro da mesa: a cena onde está o personagem do jogador, **só leitura**. Pinça = zoom, arrastar = mover, toque duplo = enquadrar de novo.
+- O **boneco do próprio jogador** tem anel dourado. Tocar num boneco mostra um cartão: personagem do grupo com a barra de PV animada; inimigo com nome, imagem e o **estado vago** (Ileso / Ferido / Muito ferido / Caído). Inimigos caídos aparecem apagados.
+- Os bonecos andam em tempo real enquanto o Mestre arrasta. Quando o Mestre leva o personagem para outra cena, o mapa troca sozinho e aparece o aviso "O Mestre levou você para outra cena".
+- Bonecos escondidos e cenas onde o jogador não está nunca chegam ao celular.
 
 ## Material Design 3 e acessibilidade
 
-- `react-native-paper` (MD3): cards, segmented buttons, chips, dialogs, snackbar e FAB-like actions, com tema escuro "dark fantasy" (primária dourada, secundária carmim) e tema claro.
+- App: `react-native-paper` (MD3): cards, segmented buttons, chips, dialogs, snackbar e FAB-like actions, com tema escuro "dark fantasy" (primária dourada, secundária carmim) e tema claro.
 - Alvos ≥ 48 dp, rótulos de acessibilidade em todos os botões só de ícone, `accessibilityLiveRegion` no resultado dos dados.
 - "Remover animações" do sistema (`useReducedMotion`) desliga tremores, partículas e pulsação. As mudanças de valor continuam visíveis.
+- Painel do Mestre: MUI com tema escuro de taverna (dourado), sem fontes nem scripts externos (funciona sem internet), botões só de ícone com rótulo acessível e dicas (tooltips).

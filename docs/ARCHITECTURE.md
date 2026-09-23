@@ -4,68 +4,74 @@
 
 ```mermaid
 flowchart LR
-  subgraph Android["App Android (Expo · React Native 0.86)"]
-    UI["Telas (expo-router)<br/>Wizard · HUD · Mesa · Dados"]
-    Anim["Reanimated 4 (UI thread)<br/>HPBar · física dos dados · efeitos"]
-    Local["Motor de dados local<br/>(offline, mesmo algoritmo)"]
-    Store["SecureStore (tokens)"]
+  subgraph Casa["Rede de casa"]
+    subgraph Srv["Servidor (Linux · .deb ou Docker)"]
+      API["FastAPI + WebSocket<br/>uvicorn · 1 processo"]
+      DB[("SQLite (WAL)<br/>/var/lib/rpgplay")]
+      Media[("Mapas e retratos<br/>/var/lib/rpgplay/media")]
+      UDP["Responder UDP 47777"]
+      Panel["Painel do Mestre<br/>(React, servido em /mestre)"]
+    end
+    subgraph PC["PC do Mestre"]
+      Electron["RPG Play Mestre (Electron)<br/>acha o servidor → carrega /mestre"]
+    end
+    subgraph Cel["Celulares (APK)"]
+      App["App Expo · React Native<br/>fichas · dados · mesa · mapa"]
+    end
   end
-  subgraph GCP["Google Cloud"]
-    Run["Cloud Run<br/>FastAPI + WebSocket"]
-    SQL[("Cloud SQL<br/>PostgreSQL 16")]
-    Redis[("Memorystore<br/>Redis pub/sub")]
-    GCS[("Cloud Storage<br/>retratos")]
-    Sched["Cloud Scheduler → Job<br/>purge (retenção)"]
-  end
-  UI -- "HTTPS REST /api/v1" --> Run
-  UI -- "WSS /ws/rooms/{pin}" --> Run
-  Run --> SQL
-  Run <--> Redis
-  Run --> GCS
-  Sched --> Run
+  Electron -- "UDP broadcast / varredura HTTP" --> UDP
+  Electron -- "HTTP + WS" --> API
+  App -- "varredura HTTP · QR code" --> API
+  App -- "HTTP + WS" --> API
+  API --> DB
+  API --> Media
+  Panel -.-> Electron
 ```
 
-- **O servidor é a autoridade** sobre rolagens em mesa (CSPRNG `secrets.SystemRandom`) e sobre o estado de HP (concorrência otimista por `version`). O cliente só anima.
-- **O servidor manda chaves, não assets**: `effect = {animation, palette, sound, haptic, shake, particles, crack, light_burst}`. O app mapeia as chaves para componentes e sons locais, então nenhuma URL arbitrária vem do servidor.
-- **Mesma classificação online e offline**: `backend/app/services/dice/outcome.py` e `mobile/src/lib/dice/outcome.ts` passam pelos mesmos casos em `shared/dice-outcome-vectors.json`, e os presets batem com `shared/dice-effects.json`.
+- **Tudo na casa.** Um processo só (uvicorn) com SQLite em modo WAL, mídia em disco e broadcaster em memória. Postgres (`RPG_DATABASE_URL`) e Redis pub/sub (`RPG_REDIS_URL`) continuam suportados, mas não são necessários.
+- **O painel do Mestre vem do servidor** (`/mestre`), e o programa do PC só acha o servidor e carrega esse painel. Assim o painel sempre bate com a versão da API, e o mesmo painel abre em qualquer navegador.
+- **O servidor é a autoridade** sobre rolagens (CSPRNG `secrets.SystemRandom`), PV (concorrência otimista por `version`) e posição dos bonecos. O cliente só anima.
+- **Visões por papel:** o Mestre recebe a mesa inteira; cada jogador recebe só a cena onde está o boneco dele, sem bonecos escondidos e com os inimigos no formato público (nome, imagem, estado vago).
+- **O servidor manda chaves, não assets:** `effect = {animation, palette, sound, haptic, shake, particles, crack, light_burst}`. O app mapeia as chaves para componentes e sons locais.
+- **Mesma classificação online e offline:** `backend/app/services/dice/outcome.py` e `mobile/src/lib/dice/outcome.ts` passam pelos mesmos casos em `shared/dice-outcome-vectors.json`.
+
+Descoberta, portas e segurança: [REDE_LOCAL.md](REDE_LOCAL.md). Instalação: [INSTALACAO.md](INSTALACAO.md).
 
 ## Estrutura de pastas
 
 ```
 RPG-Play/
-├── backend/                  FastAPI (Python 3.12)
+├── backend/                  Servidor (Python 3.11+ · FastAPI)
 │   ├── app/
-│   │   ├── api/v1/           auth · me · rulesets · characters · rooms · dice · uploads · moderation
-│   │   ├── core/             config (pydantic-settings) · security (Argon2/JWT) · rate_limit · errors
-│   │   ├── db/               Base declarativa (JSONB/JSON), sessão assíncrona (asyncpg)
-│   │   ├── models/           User, Character, InventoryItem, CharacterAbility, Room, RoomMember,
-│   │   │                     SessionEvent, Ruleset, ContentReport, UserBlock
-│   │   ├── rulesets/         schema dos pacotes + data/*.json (SRD 5.1, SRD 5.2.1, Genérico, catálogo)
-│   │   ├── schemas/          modelos Pydantic de entrada/saída
-│   │   ├── services/
-│   │   │   ├── dice/         notation (parser) · engine (rolagem) · outcome (tier + efeito)
-│   │   │   ├── character_rules.py   atributos, bônus, HP, carga, espaços de magia (puro)
-│   │   │   ├── characters.py        wizard, criação expressa, HP, descanso
-│   │   │   ├── rooms.py             PIN, entrada, log, expulsão
-│   │   │   ├── account.py           exportação, exclusão, expurgo
-│   │   │   └── media.py             retrato (EXIF strip) + armazenamento local/GCS
-│   │   ├── ws/               protocol · manager (conexões locais) · broadcaster (memória/Redis) · events · router
-│   │   ├── main.py           app factory (`uvicorn app.main:create_app --factory`)
-│   │   └── cli.py            `python -m app.cli purge`
-│   ├── alembic/              migrações (0001: esquema inicial)
-│   ├── scripts/smoke_test.py teste ponta a ponta contra uma API no ar
+│   │   ├── api/v1/           discovery · auth · admin · me · rulesets · characters · rooms · table · dice · uploads · moderation
+│   │   ├── core/             config (modo casa: data_dir, segredos gerados) · security (Argon2/JWT) · discovery (UDP) · rate_limit
+│   │   ├── db/               Base declarativa, sessão assíncrona (aiosqlite/asyncpg; pragmas WAL no SQLite)
+│   │   ├── models/           User, Character, Room, RoomMember, SessionEvent, Scene, Npc, Token, ...
+│   │   ├── rulesets/         pacotes SRD 5.1, SRD 5.2.1, Genérico + catálogo
+│   │   ├── services/         dice/* · characters · hp (dano/cura genérico) · rooms (campanhas) · table (visões e audiência) · media · account
+│   │   ├── ws/               protocol · router · events · table_events (quem recebe cada evento da mesa) · broadcaster
+│   │   ├── main.py           app factory; monta /media e o painel /mestre (fallback de SPA)
+│   │   └── server_cli.py     `rpgplay-server`: serve · info · reset-password · make-admin · backup · restore · purge
+│   ├── alembic/              migrações (0001 esquema inicial · 0002 servidor caseiro e mesa virtual), SQLite e Postgres
+│   ├── scripts/smoke_test.py teste ponta a ponta contra um servidor no ar
 │   └── tests/                pytest (SQLite por padrão; Postgres com RPG_TEST_DATABASE_URL)
-├── mobile/                   Expo SDK 57 · TypeScript
-│   ├── src/app/              rotas: (auth)/login · (tabs)/{index,dice,rooms,account}
-│   │                         character/{new,[id]} · room/{create,[pin]}
-│   ├── src/components/
-│   │   ├── hud/              HPBar · hpBarLogic · LightParticles
-│   │   ├── dice/             DiceTray · physics (worklet) · DieShape (SVG) · OutcomeEffects · DicePicker
-│   │   └── wizard/           WizardProgress · OptionList · AttributeStep
-│   ├── src/lib/              api · ws (RoomSocket) · dice/* (espelho do backend) · feedback · portrait · queries
-│   ├── src/theme/            tokens Material 3 "dark fantasy" + cores do HUD
-│   └── __tests__/            Jest: HPBar, lógica da barra, dados (vetores), física, WebSocket
-├── shared/                   vetores de teste e presets de efeito usados pelos dois lados
+├── web/                      Painel do Mestre (Vite · React 19 · MUI · react-konva · TanStack Query · zustand)
+│   ├── src/screens/          login · mesas (abertas/arquivadas) · contas (admin)
+│   ├── src/table/            mesa virtual: MapCanvas (Konva) · TokenNode · SceneBar · Roster · DetailPanel · LogPanel
+│   │                         reducer (eventos do WS) · geometry (grade, zoom) · socket · ConnectDialog (QR)
+│   └── e2e/                  Playwright contra o servidor real, com uma jogadora no WebSocket
+├── desktop/                  Programa do Mestre (Electron · electron-builder → .exe NSIS e .deb)
+│   ├── src/                  main (janela, segurança, menu) · preload (ponte só no launcher) · discovery (UDP + HTTP)
+│   ├── launcher/             tela local de escolha do servidor (CSP estrita)
+│   └── e2e/                  Playwright + Electron contra o servidor real
+├── mobile/                   App dos jogadores (Expo SDK 57 · React Native 0.86)
+│   ├── src/app/              server (achar servidor) · scan (QR) · join (link) · (auth)/login · (tabs)/* · character/* · room/*
+│   ├── src/components/       hud/HPBar · dice/* · table/SceneView (mapa só leitura, pinça/arrasto) · wizard/*
+│   ├── src/lib/              api · ws · discovery (varredura /24, QR) · table (reducer + geometria) · dice/*
+│   └── src/state/            session (tokens no Keystore) · server (servidor escolhido)
+├── packaging/server/         .deb do servidor: PyInstaller, systemd, server.env, scripts do dpkg, build-deb.sh
+├── shared/                   vetores de teste e presets de efeito usados pelo backend e pelo app
+├── Dockerfile · docker-compose.yml   alternativa ao .deb (network_mode host)
 └── docs/
 ```
 
@@ -81,136 +87,145 @@ erDiagram
   RULESETS ||--o{ ROOMS : "regras (fixas)"
   ROOMS ||--o{ ROOM_MEMBERS : ""
   ROOMS ||--o{ SESSION_EVENTS : "log"
+  ROOMS ||--o{ SCENES : "cenas"
+  ROOMS ||--o{ NPCS : "inimigos"
+  SCENES ||--o{ TOKENS : "bonecos"
+  CHARACTERS |o--o{ TOKENS : "boneco do personagem"
+  NPCS |o--o{ TOKENS : "boneco do inimigo"
   CHARACTERS ||--o{ INVENTORY_ITEMS : ""
   CHARACTERS ||--o{ CHARACTER_ABILITIES : ""
   CHARACTERS |o--o{ ROOM_MEMBERS : "sentado com"
-  USERS ||--o{ CONTENT_REPORTS : "denuncia"
-  USERS ||--o{ USER_BLOCKS : "bloqueia"
 
   USERS {
     uuid id PK
-    string email UK
-    string password_hash
+    string username UK "a-z 0-9 _ . - (3 a 32)"
+    string email "opcional"
+    string password_hash "Argon2id"
     string display_name
-    timestamptz age_gate_confirmed_at
-    string terms_version
+    bool is_admin "primeira conta"
     timestamptz deleted_at
-  }
-  RULESETS {
-    string id PK
-    string version
-    string license
-    text attribution
-    string status
-    jsonb pack
-    string content_hash
-  }
-  CHARACTERS {
-    uuid id PK
-    uuid owner_id FK
-    string ruleset_id FK
-    string status
-    int wizard_step
-    string ancestry_key
-    string class_key
-    string background_key
-    jsonb attributes
-    jsonb attribute_audit
-    int hp_max
-    int hp_current
-    int hp_temp
-    jsonb spell_slots
-    int version
-  }
-  INVENTORY_ITEMS {
-    uuid id PK
-    uuid character_id FK
-    string name
-    int quantity
-    numeric weight_each
-    bool equipped
-  }
-  CHARACTER_ABILITIES {
-    uuid id PK
-    uuid character_id FK
-    string name
-    int uses_max
-    int uses_spent
-    string recharge
   }
   ROOMS {
     uuid id PK
     char6 pin "único entre abertas"
     uuid master_id FK
     string ruleset_id FK
-    string status
-    int max_players
-    timestamptz expires_at
+    string status "open | closed (arquivada)"
+    timestamptz last_activity_at
   }
-  ROOM_MEMBERS {
-    uuid room_id PK
-    uuid user_id PK
-    uuid character_id FK
-    string role
-    timestamptz kicked_at
+  SCENES {
+    uuid id PK
+    uuid room_id FK
+    string name
+    string map_key "rooms/{room}/map/..."
+    int map_width
+    int map_height
+    int grid_size
+    bool grid_visible
+    int sort_order
+  }
+  NPCS {
+    uuid id PK
+    uuid room_id FK
+    string name
+    string portrait_key
+    int hp_max
+    int hp_current
+    int hp_temp
+    int armor_class
+    json attributes
+    text notes
+    int version
+  }
+  TOKENS {
+    uuid id PK
+    uuid room_id FK
+    uuid scene_id FK
+    uuid character_id FK "OU npc_id (CHECK)"
+    uuid npc_id FK
+    float x
+    float y
+    float size "em casas da grade"
+    bool hidden
+    int z
+    int version
+  }
+  CHARACTERS {
+    uuid id PK
+    uuid owner_id FK
+    string ruleset_id FK
+    json attributes
+    int hp_max
+    int hp_current
+    int hp_temp
+    int version
   }
   SESSION_EVENTS {
     bigint id PK
     uuid room_id FK
-    uuid actor_user_id FK
-    uuid character_id FK
     string type
-    string visibility
-    jsonb payload
-    timestamptz created_at
+    string visibility "public | master_only"
+    json payload
   }
 ```
 
 Decisões:
-- **Enums como `VARCHAR`** (`native_enum=False`): adicionar um valor não exige `ALTER TYPE` numa migração.
-- **`JSONB` no Postgres, `JSON` no SQLite**: os testes rodam em SQLite sem dependências, e o CI roda contra Postgres real. `alembic check` garante que os models batem com a migração.
-- **Índice único parcial** `uq_rooms_open_pin (pin) WHERE status='open'`: o PIN é curto (32⁶ ≈ 1 bilhão de combinações) e pode voltar a ser usado depois que a sala fecha.
-- **`attribute_audit`** guarda método, valores base, bônus e as rolagens de atributo (transparência para o Mestre).
-- **`version`** em `characters`: `hp.change` com `expected_version` antigo devolve 409, o que evita o jogador e o Mestre sobrescreverem o dano um do outro.
+- **Um boneco por personagem por mesa** (índice único parcial `(room_id, character_id)`). Mudar o grupo de cena é trocar o `scene_id`, e a cena de um jogador é a cena do boneco do personagem dele.
+- **Inimigos são da mesa**, não da cena. O mesmo inimigo pode ter bonecos em cenas diferentes e é criado em lote ("Goblin" × 3 → Goblin 1, 2, 3).
+- **Enums como `VARCHAR`**, e **`JSONB` no Postgres / `JSON` no SQLite.** A migração 0002 usa `batch_alter_table` para funcionar nos dois, e o CI roda `upgrade → check → downgrade → upgrade` em ambos.
+- **Campanhas persistentes:** mesas não expiram mais. `closed` = arquivada (dá para reabrir; se o PIN antigo estiver em uso, ganha outro). O expurgo diário apaga campanhas sem atividade há `RPG_ROOM_RETENTION_DAYS` (365 por padrão) e o log com mais de 90 dias.
+- **`version`** em personagens, inimigos e bonecos: `hp.change` com versão antiga devolve conflito, e `token.moved` com versão antiga é ignorado pelos clientes (eco atrasado do arrasto).
+
+## Fluxo: o Mestre move um inimigo
+
+```mermaid
+sequenceDiagram
+  participant M as Painel do Mestre
+  participant S as Servidor
+  participant A as Ana (mesma cena)
+  participant B as Beto (outra cena)
+  M->>S: token.move {token_id, x, y} (~10/s durante o arrasto)
+  S->>S: só o Mestre · limite de frequência · grava x/y, version+1
+  S-->>M: token.moved
+  S-->>A: token.moved (boneco visível na cena dela)
+  Note over B: não recebe nada
+  M->>S: PATCH /tokens/{id} {x, y} ao soltar (encaixado na grade)
+  S-->>A: token.upserted (posição final)
+```
 
 ## Fluxo: rolagem na mesa
 
 ```mermaid
 sequenceDiagram
   participant P as Jogador (app)
-  participant API as Cloud Run (WS)
-  participant DB as PostgreSQL
-  participant R as Redis
-  participant M as Mestre (app)
+  participant S as Servidor
+  participant M as Mestre
   P->>P: gesto → física começa na hora (UI thread)
-  P->>API: roll.request {id, notation, character_id, visibility}
-  API->>API: parse → roll (CSPRNG) → classify(regras da sala)
-  API->>DB: INSERT session_events (dice_roll)
-  API->>R: PUBLISH rpgplay:room:{id}
-  R-->>API: (todas as instâncias)
-  API-->>P: roll.result {roll, outcome.effect, summary}
-  API-->>M: roll.result (+ notificação no app)
-  P->>P: dados param → revela faces do servidor → efeito (tier)
+  P->>S: roll.request {id, notation, character_id, visibility}
+  S->>S: parse → roll (CSPRNG) → classify(regras da mesa) → grava no log
+  S-->>P: roll.result {roll, outcome.effect, summary}
+  S-->>M: roll.result (painel: última rolagem em destaque + log)
+  P->>P: dados param → revelam as faces do servidor → efeito (tier)
 ```
-
-A animação começa **antes** da resposta. A resposta leva cerca de 50–150 ms e os dados rolam por 1–2 s, então o jogador não percebe a ida ao servidor. Se a resposta demorar mais que a física, os dados esperam parados, sem face, até o resultado chegar.
 
 ## Protocolo WebSocket (v1)
 
 | Direção | Tipo | Campos |
 |---|---|---|
-| C→S | `auth` | `token`: **primeira mensagem**, em até 5 s. Senão fecha com 4401 |
+| C→S | `auth` | `token`: **primeira mensagem**, em até 5 s; senão fecha com 4401 |
 | C→S | `ping` | resposta `pong` (keepalive a cada 25 s) |
-| C→S | `roll.request` | `id`, `notation`, `character_id?`, `label?`, `visibility: public\|master_only` |
-| C→S | `hp.change` | `character_id`, `delta`, `kind: damage\|heal\|temp`, `expected_version?` |
-| S→C | `welcome` | `room` (membros, HP, online), `log` (últimos 50 eventos visíveis) |
-| S→C | `roll.result` | `request_id`, `roll`, `outcome{tier,natural,intensity,effect}`, `actor`, `character`, `summary` |
-| S→C | `hp.changed` | `character_id`, `hp_*`, `delta`, `absorbed_by_temp`, `effect: bleed\|shield_hit\|heal_glow\|shield_up`, `version`, `summary` |
+| C→S | `roll.request` | `id`, `notation`, `character_id?` ou `npc_id?` (só o Mestre), `label?`, `visibility: public\|master_only` |
+| C→S | `hp.change` | `character_id` ou `npc_id` (só o Mestre), `delta`, `kind: damage\|heal\|temp`, `expected_version?` |
+| C→S | `token.move` | `token_id`, `x`, `y` (só o Mestre) |
+| S→C | `welcome` | `room`, `log` (últimos 50 eventos visíveis), `table` (visão do Mestre ou do jogador) |
+| S→C | `roll.result` · `hp.changed` | resultado com `effect` para a animação e `summary` para o log |
+| S→C | `scene.upserted/deleted` · `token.upserted/moved/deleted` · `npc.upserted/deleted` | mesa virtual, filtrada por cena e por papel |
+| S→C | `npc.hp.changed` | só para o Mestre (números + log secreto). Os jogadores recebem `npc.upserted` com o estado novo |
+| S→C | `view.reset` | a cena do jogador mudou: vem a visão inteira da cena nova |
+| S→C | `party.updated` | alguém entrou, trocou de personagem ou foi removido |
 | S→C | `presence` · `member.kicked` · `room.closed` · `error{code,message,ref}` | |
 
-Códigos de fechamento: `4401` token inválido · `4403` não é membro / foi removido · `4404` sala não existe · `4410` sala encerrada. O cliente reconecta com backoff exponencial (0,5 s → 15 s, com jitter), exceto nos códigos finais.
-
-Visibilidade: o Mestre recebe **tudo**. Os jogadores recebem os eventos `public`, e uma rolagem `master_only` vai só para o Mestre e para quem rolou (rolagem secreta). O dano aplicado pela ficha fora do WebSocket (`POST /characters/{id}/hp`) também é gravado no log e anunciado para as mesas em que o personagem está.
+Códigos de fechamento: `4401` token inválido · `4403` não é membro / foi removido · `4404` mesa não existe · `4410` mesa arquivada. Os clientes reconectam com backoff (0,5 s → 10–15 s), exceto nos códigos finais, e o `welcome` traz o estado atual.
 
 ## Classificação de sucesso/falha
 
@@ -227,9 +242,10 @@ Visibilidade: o Mestre recebe **tudo**. Os jogadores recebem os eventos `public`
 | high | `glow_soft` | gold_soft | chime | success_light | faíscas |
 | critical_success | `golden_burst` | gold | epic_fanfare | success_heavy | explosão de luz, confete |
 
-## Escala e operação
+## Operação
 
-- **Cloud Run** com várias instâncias: o `RedisBroadcaster` distribui cada evento para todas, e cada instância entrega às conexões que mantém. Sem Redis (dev/teste) usa o `InMemoryBroadcaster`.
-- As conexões WebSocket duram até o timeout de request do Cloud Run (até 60 min). O cliente reconecta sozinho e recebe `welcome` com o estado atual.
-- Rate limit em memória por instância. Para um limite global, troque o `RateLimiter` por um contador no Redis (a interface é a mesma).
-- Retenção: `python -m app.cli purge` diário (Cloud Run Job + Cloud Scheduler).
+- **Um processo, uma máquina:** o `InMemoryBroadcaster` entrega cada evento às conexões do próprio processo. Com Redis configurado, vários processos podem dividir a carga (útil só fora de casa).
+- **Migrações automáticas:** `rpgplay-server serve` roda `alembic upgrade head` antes de subir, então atualizar o `.deb` já migra o banco.
+- **Backup consistente** com o servidor ligado (API de backup do SQLite) e **restauração** que guarda os dados anteriores.
+- **Expurgo diário** pelo timer systemd `rpgplay-server-purge.timer`.
+- **Limites de frequência** em memória (por processo).

@@ -1,57 +1,44 @@
-# Privacidade: LGPD / GDPR
+# Privacidade: LGPD / GDPR (uso doméstico)
 
-Este documento é a base técnica da Política de Privacidade e do formulário **Data Safety** da Play Store. O texto jurídico final deve ser revisado por um advogado e publicado numa URL pública.
+O RPG Play roda num servidor **na casa de quem instala**. Não há nuvem, empresa intermediária, analytics nem anúncios: os dados das contas, fichas e campanhas ficam no disco desse servidor (`/var/lib/rpgplay`). Quem instala e administra o servidor (normalmente o Mestre) é quem guarda esses dados.
+
+Para um grupo de amigos jogando em casa, a LGPD não se aplica a tratamento "por pessoa natural para fins exclusivamente particulares e não econômicos" (art. 4º, I). Mesmo assim, o sistema foi feito para respeitar os direitos do titular. E se um dia for usado de forma pública ou comercial (clube, loja, evento pago), este documento serve de base para a política de privacidade.
 
 ## Inventário de dados
 
-| Dado | Onde fica | Finalidade | Base legal (LGPD art. 7º) | Retenção |
-|---|---|---|---|---|
-| E-mail | `users.email` | Login, recuperação de conta | Execução de contrato (V) | Até a exclusão da conta. Anonimizado na hora ao excluir e expurgado em 30 dias |
-| Senha | `users.password_hash` (Argon2) | Autenticação | Execução de contrato | Idem |
-| Nome de exibição | `users.display_name` | Identificação na mesa | Execução de contrato | Idem |
-| Confirmação de idade 13+ | `users.age_gate_confirmed_at` (**sem** data de nascimento) | Cumprir a idade mínima | Obrigação legal/regulatória (II) | Idem |
-| Aceite de termos e política | `users.terms_version`, `privacy_version`, `consent_at` | Prova de consentimento/aceite | Obrigação legal (II) | Idem |
-| Fichas de personagem | `characters`, `inventory_items`, `character_abilities` | Funcionalidade principal | Execução de contrato | Até o usuário apagar a ficha ou a conta |
-| Retrato do personagem | GCS `portraits/{user}/...` (JPEG 512 px **sem EXIF**) | Exibir na ficha e na mesa | Execução de contrato | Apagado com a ficha ou a conta |
-| Log das mesas | `session_events` | Histórico da sessão para o Mestre | Legítimo interesse (IX) | **90 dias** (`RPG_EVENT_RETENTION_DAYS`) |
-| Denúncias e bloqueios | `content_reports`, `user_blocks` | Segurança e moderação (política de UGC) | Legítimo interesse / obrigação | Denúncia: até a resolução mais o prazo de auditoria. Bloqueios apagados com a conta |
-| Tokens de sessão | `refresh_tokens` (só o **hash**); no aparelho, Keystore | Manter o login | Execução de contrato | 30 dias ou logout |
+| Dado | Onde fica | Para quê | Retenção |
+|---|---|---|---|
+| Usuário e nome de exibição | `users.username`, `users.display_name` | Login e identificação na mesa | Até a pessoa excluir a conta (anonimizados na hora) |
+| Senha | `users.password_hash` (Argon2id) | Autenticação | Idem |
+| E-mail | `users.email` (**opcional**; os apps não pedem) | — | Idem |
+| Fichas de personagem | `characters`, itens e habilidades | Funcionalidade principal | Até apagar a ficha ou a conta |
+| Retratos e mapas | `/var/lib/rpgplay/media` (JPEG **sem EXIF/GPS**) | Exibir na ficha e na mesa | Apagados com a ficha, a mesa ou a conta |
+| Campanhas (cenas, inimigos, bonecos) | `scenes`, `npcs`, `tokens` | Mesa virtual | Até apagar a conta do Mestre; expurgo após `RPG_ROOM_RETENTION_DAYS` (365) dias sem atividade |
+| Log das mesas | `session_events` | Histórico da sessão | **90 dias** (`RPG_EVENT_RETENTION_DAYS`) |
+| Tokens de sessão | `refresh_tokens` (só o **hash**); no celular, Android Keystore | Manter o login | 90 dias ou logout. A redefinição de senha pelo admin derruba todas as sessões da pessoa |
 
-**O que NÃO coletamos:** localização, contatos, ID de publicidade, analytics de terceiros, data de nascimento, gravações de áudio, lista de apps. **Rolagens solo não são gravadas.**
+**Não coletados:** localização, contatos, data de nascimento, identificadores de publicidade, analytics, gravações de áudio, lista de apps. A câmera só é usada na hora de tirar a foto do personagem ou de ler o QR code. **Rolagens fora de mesa não são gravadas.**
 
-## Direitos do titular (art. 18) e onde estão implementados
+## Direitos do titular (art. 18)
 
-| Direito | Implementação |
+| Direito | Onde |
 |---|---|
-| Confirmação e acesso | `GET /api/v1/me` e `GET /api/v1/me/export` |
-| Portabilidade | `GET /api/v1/me/export` (JSON com conta, fichas, itens, habilidades, mesas, eventos e bloqueios). No app: Conta → "Exportar meus dados" |
-| Correção | `PATCH /api/v1/me`, `PATCH /api/v1/characters/{id}` |
-| Eliminação | `DELETE /api/v1/me`. Apaga fichas e retratos **na hora**, fecha as mesas em que a pessoa é Mestre, remove participações, tokens e bloqueios, desvincula o log e anonimiza a conta. `python -m app.cli purge` remove a linha em 30 dias. Também pela web (`accountDeletionUrl`) |
-| Revogação do consentimento | Excluir a conta. Não há tratamento baseado só em consentimento além do aceite dos termos |
+| Acesso e portabilidade | App → Conta → **Exportar meus dados** (`GET /api/v1/me/export`: JSON com conta, fichas, mesas e eventos) |
+| Correção | Editar a ficha no app; `PATCH /api/v1/me` |
+| Eliminação | App → Conta → **Excluir minha conta** (`DELETE /api/v1/me`): apaga fichas, retratos e as mesas em que a pessoa é Mestre (com os mapas); remove participações e sessões; anonimiza a conta |
+| Senha esquecida | O admin do servidor define uma nova (`sudo rpgplay-server reset-password <usuário>` ou pelo painel) e as sessões antigas caem |
 
 ## Segurança
 
-- TLS obrigatório (Cloud Run): o app usa `https://` e `wss://` em produção.
-- Senhas com Argon2id (`argon2-cffi`). JWT de acesso de 15 min. Refresh token opaco, **de uso único** (rotação), guardado só como SHA-256.
-- WebSocket autenticado na **1ª mensagem** (o token nunca vai na URL, que acaba em logs de proxy).
-- Rate limit em login, PIN de sala, rolagens, dano/cura e upload.
-- Upload de imagem: limite de 5 MB, proteção contra *decompression bomb*, reencode (descarta EXIF/GPS), bucket privado com URLs assinadas de 1 h.
-- No aparelho: tokens no `expo-secure-store` (Android Keystore) e `allowBackup=false`.
-- Segredos (`RPG_JWT_SECRET`, credenciais do banco) no Secret Manager. Em produção o app **recusa** subir com o segredo de dev (`core/config.py`).
+Resumo (detalhes em [REDE_LOCAL.md](REDE_LOCAL.md#modelo-de-segurança)):
 
-## Formulário Data Safety
+- Feito para a **rede de casa**: HTTP sem TLS dentro da LAN. **Nunca exponha a porta 8080 na internet.** Para jogar à distância, use uma VPN (Tailscale, WireGuard).
+- Senhas com Argon2id; refresh token de uso único guardado como hash; segredo JWT gerado na instalação (permissão 600).
+- Cada jogador só recebe o que pode ver: a própria cena, sem bonecos escondidos, e dos inimigos só o estado vago.
+- Uploads reencodados (sem EXIF/GPS), com limite de tamanho e proteção contra *decompression bomb*.
+- Serviço com usuário próprio e escrita só em `/var/lib/rpgplay`; backups com `rpgplay-server backup`.
+- No celular: tokens no Android Keystore e `allowBackup=false` (nada vai para o backup em nuvem do Android).
 
-| Pergunta do Play Console | Resposta |
-|---|---|
-| O app coleta ou compartilha dados? | Coleta: sim. Compartilha com terceiros: **não** (GCP é operador/processador) |
-| Informações pessoais → E-mail | Coletado · obrigatório · finalidade: gerenciamento de conta |
-| Informações pessoais → Nome | Coletado (nome de exibição/apelido) · obrigatório · funcionalidade do app |
-| Fotos e vídeos → Fotos | Coletado · **opcional** · funcionalidade do app (retrato) |
-| Atividade no app → Outro conteúdo gerado pelo usuário | Coletado (fichas, nomes, log da mesa) · funcionalidade do app |
-| Localização, contatos, IDs de dispositivo/publicidade, dados financeiros, saúde | **Não coletados** |
-| Dados criptografados em trânsito? | Sim |
-| O usuário pode pedir a exclusão? | Sim: no app e pela URL web |
+## Menores de idade
 
-## Crianças e adolescentes
-
-O público-alvo é 13+. O cadastro exige a confirmação "Tenho 13 anos ou mais" (o servidor recusa sem ela). Não direcionamos o app a crianças nem participamos do programa Families. Se o público mudar, a LGPD (art. 14) exige consentimento específico de um dos pais, e isso muda o fluxo de cadastro.
+Como é um sistema doméstico, não há verificação de idade no cadastro: quem administra o servidor decide quem entra (e pode fechar o cadastro com `RPG_ALLOW_REGISTRATION=false`). Se um dia o sistema for oferecido ao público, a LGPD (art. 14) exige consentimento específico de um dos pais para crianças, e o fluxo de cadastro precisa mudar.

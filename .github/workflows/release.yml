@@ -1,0 +1,155 @@
+name: Release
+
+# Gera todos os instaladores e anexa ao Release do GitHub:
+#   git tag v0.2.0 && git push origin v0.2.0
+# (ou rode manualmente em Actions → Release → Run workflow, que só guarda os arquivos como artefatos).
+#
+# APK assinado: cadastre em Settings → Secrets and variables → Actions
+#   ANDROID_KEYSTORE_BASE64  (base64 do arquivo .jks)   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS                                    ANDROID_KEY_PASSWORD
+# Sem esses segredos o APK sai assinado com a chave de debug (instala, mas cada build terá outra chave e o
+# Android vai pedir para desinstalar antes de atualizar). Veja docs/INSTALACAO.md → "Gerar os instaladores".
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  server:
+    name: servidor .deb (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64 # Raspberry Pi 4/5 com sistema de 64 bits
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+      - name: Python portátil (roda em distros com glibc antiga)
+        run: uv python install 3.12
+      - name: Gerar pacote
+        run: PYTHON="$(uv python find 3.12)" packaging/server/build-deb.sh
+      - name: Instalar e testar o pacote
+        run: |
+          sudo apt-get install -y ./dist/rpgplay-server_*_${{ matrix.arch }}.deb
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/api/v1/discovery
+          curl -sf http://127.0.0.1:8080/mestre/ | grep -q '<div id="root">'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: servidor-${{ matrix.arch }}
+          path: dist/*.deb
+
+  desktop:
+    name: programa do Mestre (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: dist:win
+            files: desktop/release/*.exe
+          - os: ubuntu-22.04
+            target: dist:linux
+            files: desktop/release/*.deb
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run ${{ matrix.target }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # sem certificado de assinatura de código
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mestre-${{ matrix.os }}
+          path: ${{ matrix.files }}
+
+  android:
+    name: app dos jogadores (APK)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --clean --no-install
+      - name: Compilar APK (release)
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Assinar com a chave do projeto
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          OUT="$GITHUB_WORKSPACE/RPG-Play-$VERSION.apk"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/rpgplay.jks"
+            APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner
+            "$APKSIGNER" sign --ks "$RUNNER_TEMP/rpgplay.jks" --ks-pass env:KEYSTORE_PASSWORD \
+              --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASSWORD --out "$OUT" "$APK"
+            "$APKSIGNER" verify --print-certs "$OUT" | head -n 3
+            rm -f "$RUNNER_TEMP/rpgplay.jks"
+          else
+            echo "::warning::Sem ANDROID_KEYSTORE_BASE64: APK assinado com a chave de debug."
+            cp "$APK" "$OUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: RPG-Play-*.apk
+
+  release:
+    name: publicar Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [server, desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: instaladores
+          merge-multiple: true
+      - run: ls -la instaladores
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: instaladores/*
+          generate_release_notes: true
+          body: |
+            Instaladores do RPG Play para a rede de casa (veja docs/INSTALACAO.md):
+            - `rpgplay-server_*_amd64.deb` / `_arm64.deb`: servidor (PC Linux sempre ligado ou Raspberry Pi 64 bits)
+            - `RPG-Play-Mestre-Setup-*.exe` / `rpgplay-mestre_*_amd64.deb`: programa do Mestre (Windows / Linux)
+            - `RPG-Play-*.apk`: app dos jogadores (Android)

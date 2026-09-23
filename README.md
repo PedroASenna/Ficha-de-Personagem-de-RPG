@@ -1,82 +1,129 @@
 # RPG Play
 
-App Android de RPG de mesa que ataca a **lentidão na criação de personagens**: personagem jogável em um toque (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico), **HUD de combate** com barra de HP que sangra e brilha, e **mesa sincronizada** em que o Mestre recebe cada rolagem e cada dano em tempo real.
+RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
 
-| Camada | Stack |
+- **Personagem jogável em um toque** (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico) e **HUD de combate** com barra de PV que sangra e brilha.
+- **Mesa virtual do Mestre:** mapas importados em **cenas** (troca quando o grupo se separa), bonecos com a imagem dos personagens e **inimigos criados na hora**. Clicar num boneco mostra **os atributos em tempo real**, com dano, cura e rolagens secretas.
+- **No celular, o jogador vê o mapa da cena onde está**, com os bonecos andando ao vivo. Dos inimigos, vê só nome, imagem e se estão **Ilesos, Feridos, Muito feridos ou Caídos**.
+- **Contas locais** (usuário e senha no servidor) e **campanhas salvas**: arquivar e reabrir de onde parou.
+
+| Peça | Instalador | Tecnologia |
+|---|---|---|
+| Servidor | `.deb` (amd64, arm64) ou Docker | Python · FastAPI · WebSocket · SQLite (Postgres/Redis opcionais) · systemd |
+| Programa do Mestre (PC) | `.exe` (Windows) e `.deb` (Linux) | Electron, que carrega o painel web servido pelo servidor |
+| Painel do Mestre (web) | vem dentro do servidor, em `/mestre` | React 19 · MUI · react-konva · TanStack Query · zustand |
+| App dos jogadores | `.apk` (Android) | Expo SDK 57 · React Native 0.86 · Reanimated 4 · react-native-svg · Paper (Material 3) |
+
+**Para instalar e jogar: [docs/INSTALACAO.md](docs/INSTALACAO.md).**
+
+## Documentação
+
+| Assunto | Onde |
 |---|---|
-| Mobile | React Native 0.86 · Expo SDK 57 · TypeScript · expo-router · Reanimated 4 + worklets · react-native-svg · react-native-paper (Material 3) · TanStack Query · zustand |
-| Backend | Python 3.12 · FastAPI · SQLAlchemy 2 (async) · PostgreSQL 16 · Alembic · WebSockets · Redis pub/sub |
-| Infra | Docker · Cloud Run · Cloud SQL · Memorystore · Cloud Storage · Secret Manager |
+| Instalação passo a passo (servidor, PC do Mestre, APK), primeira sessão, backup, problemas comuns, gerar instaladores | [docs/INSTALACAO.md](docs/INSTALACAO.md) |
+| Descoberta na rede, portas, modelo de segurança, onde ficam os dados | [docs/REDE_LOCAL.md](docs/REDE_LOCAL.md) |
+| Arquitetura, pastas, modelo de dados, protocolo WebSocket | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Fluxos de UX (app, painel do Mestre, mapa do jogador) | [docs/UX_FLOWS.md](docs/UX_FLOWS.md) |
+| Sistemas de regras (o Mestre escolhe ao criar a mesa) | [docs/RULESETS.md](docs/RULESETS.md) |
+| Privacidade (uso doméstico) | [docs/PRIVACY_LGPD.md](docs/PRIVACY_LGPD.md) |
+| Referência, não usada hoje: Play Store e deploy na nuvem | [docs/referencia/](docs/referencia) |
 
-## Onde está cada entregável
+## Desenvolvimento
 
-| Entregável | Onde |
-|---|---|
-| 1. Estrutura de pastas | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#estrutura-de-pastas) |
-| 2. Esquema do banco (usuários, fichas, salas) | [`backend/app/models/`](backend/app/models) · migração [`0001_esquema_inicial.py`](backend/alembic/versions/0001_esquema_inicial.py) · [diagrama ER](docs/ARCHITECTURE.md#modelo-de-dados) |
-| 3. Barra de HP animada | [`mobile/src/components/hud/HPBar.tsx`](mobile/src/components/hud/HPBar.tsx) + lógica testável em [`hpBarLogic.ts`](mobile/src/components/hud/hpBarLogic.ts) |
-| 4. Rolagem no backend + animação de sucesso/falha via WebSocket | [`services/dice/`](backend/app/services/dice) (parser, rolagem, classificação) · [`ws/router.py`](backend/app/ws/router.py) · [protocolo](docs/ARCHITECTURE.md#protocolo-websocket-v1) |
-| 5. Checklist da Play Store | [docs/PLAY_STORE_CHECKLIST.md](docs/PLAY_STORE_CHECKLIST.md) |
-| Sistemas de regras (o Mestre escolhe ao criar a sala) | [docs/RULESETS.md](docs/RULESETS.md) |
-| Fluxos de UX | [docs/UX_FLOWS.md](docs/UX_FLOWS.md) |
-| LGPD / Data Safety | [docs/PRIVACY_LGPD.md](docs/PRIVACY_LGPD.md) |
-| Deploy GCP | [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md) |
-
-## Rodando localmente
-
-### Backend
-
-Com Docker:
-
-```bash
-docker compose up --build        # API em http://localhost:8080 (docs em /docs)
-```
-
-Sem Docker (Postgres 16 e Redis locais):
+### Servidor
 
 ```bash
 cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env              # ajuste RPG_DATABASE_URL / RPG_REDIS_URL
-alembic upgrade head
-uvicorn app.main:create_app --factory --reload --port 8080
-python scripts/smoke_test.py http://localhost:8080    # Mestre + jogadora, rolagem e dano via WebSocket
+rpgplay-server serve                      # migra o SQLite em ./data e sobe em http://0.0.0.0:8080
+python scripts/smoke_test.py http://localhost:8080
 ```
 
-Testes: `pytest` usa SQLite por padrão. Para rodar contra Postgres (como no CI), use `RPG_TEST_DATABASE_URL=postgresql+asyncpg://rpg:rpg@localhost:5432/rpg_test pytest`.
+Testes: `pytest` (SQLite). Contra Postgres, como no CI: `RPG_TEST_DATABASE_URL=postgresql+asyncpg://rpg:rpg@localhost:5432/rpg_test pytest`. Qualidade: `ruff check .` e `black --check .`.
 
-### Mobile
+### Painel do Mestre
+
+```bash
+cd web
+npm ci
+npm run dev          # http://localhost:5173/mestre/ (repassa /api, /ws e /media para o servidor em :8080)
+npm run build        # web/dist, que o servidor entrega em /mestre (RPG_WEB_DIST_DIR=../web/dist)
+```
+
+Qualidade: `npx tsc -b` · `npx eslint .` · `npm run format:check` · `npx vitest run` · `npx playwright test` (sobe um servidor real e faz o fluxo do Mestre com uma jogadora conectada).
+
+### Programa do Mestre
+
+```bash
+cd desktop
+npm ci
+npm start                       # abre o launcher: acha o servidor e carrega /mestre
+npm run dist:linux              # release/rpgplay-mestre_<versão>_amd64.deb
+npm run dist:win                # release/RPG-Play-Mestre-Setup-<versão>.exe (Windows ou Linux com wine)
+```
+
+Qualidade: `npm run typecheck` · `npx eslint .` · `npx vitest run` · `xvfb-run -a npx playwright test`.
+
+### App dos jogadores
 
 ```bash
 cd mobile
-npm install
-npx expo run:android                                  # development build (emulador ou aparelho)
-EXPO_PUBLIC_API_URL=http://192.168.0.10:8080 npx expo start   # aparelho físico na mesma rede
+npm ci
+npx expo run:android            # development build (emulador ou aparelho)
+npm run apk                     # APK release (precisa do Android SDK)
 ```
 
-O app usa módulos nativos (Reanimated, SVG, haptics, áudio, image picker), então **não roda no Expo Go**: use um development build (`npx expo run:android` ou `eas build --profile development`).
+O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então **não roda no Expo Go**. Qualidade: `npx tsc --noEmit` · `npx eslint .` · `npx jest` · `npx expo export --platform android`.
 
-Qualidade: `npx tsc --noEmit` · `npx eslint .` · `npx jest` · `npx expo export --platform android`.
+### Instaladores
 
-### Builds para a loja
+- Servidor: `packaging/server/build-deb.sh`
+- Tudo de uma vez: tag `v*`, e o workflow [Release](.github/workflows/release.yml) gera os `.deb` do servidor (amd64/arm64), o `.exe`/`.deb` do Mestre e o APK assinado.
 
-```bash
-cd mobile
-npx eas-cli@latest build --platform android --profile production   # AAB, target API 36
-npx eas-cli@latest submit --platform android --profile production  # faixa interna
-```
+## Verificação feita
 
-## Verificação feita neste scaffold
+- **Servidor:** 114 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+  - contas locais e admin;
+  - descoberta HTTP e UDP;
+  - campanhas arquivadas e reabertas;
+  - permissões da mesa;
+  - WebSocket com três conexões (o `token.move` só chega a quem está na cena, a separação do grupo gera `view.reset`, o dano em inimigo manda números só ao Mestre);
+  - backup e restauração, inclusive recusando tar malicioso.
 
-- **Backend**: 95 testes pytest (SQLite **e** PostgreSQL 16), `ruff` e `black` limpos. `alembic upgrade → check → downgrade → upgrade` sem divergência dos models. Smoke test ponta a ponta com uvicorn + Postgres + Redis pub/sub (sala SRD 5.1, PIN, `1d20+5`, dano, log do Mestre).
-- **Mobile**: `tsc` e `eslint` (regras do React Compiler) limpos. 75 testes Jest, incluindo os **mesmos vetores de classificação do backend** (`shared/`) e a renderização da HPBar. `expo export` gera o bundle Hermes de Android, e `expo prebuild` confere o manifest: target/compile SDK 36, permissões de mídia, microfone, localização e foreground service removidas, `allowBackup=false`.
-- **Não verificado aqui**: build nativo (Gradle/AAB) e execução em aparelho, porque o ambiente não tem Android SDK. Isso fica para o `eas build` e o teste fechado. O `docker compose` também não pôde ser executado (o download de imagens do Docker Hub está bloqueado neste ambiente). O mesmo conjunto rodou com Postgres/Redis nativos.
+  `ruff` e `black` limpos. A migração 0002 passa por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados. O smoke test ponta a ponta passou.
+- **Pacote `.deb` do servidor:** gerado aqui com Python portátil (exige glibc ≥ 2.28) e instalado com `dpkg`, rodando como o usuário `rpgplay`. Funcionaram:
+  - `/health`, `/mestre`, descoberta por **broadcast UDP** e smoke test;
+  - `reset-password`, `backup` e `restore` pelo comando `rpgplay-server`;
+  - atualização mantendo o `server.env`, `remove` mantendo as campanhas e `purge` apagando tudo.
+- **Painel do Mestre:** 34 testes Vitest. Um teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável empacotado:
+  - criar conta e mesa;
+  - enviar um mapa;
+  - receber a jogadora ao vivo;
+  - criar inimigos;
+  - arrastar o goblin com encaixe na grade;
+  - aplicar dano (a jogadora só vê "Muito ferido");
+  - rolar dados;
+  - separar o grupo em outra cena;
+  - mostrar o QR code.
+- **Programa do Mestre:** 8 testes Vitest e um Playwright + Electron que roda contra o código **e** contra o `.deb` instalado:
+  - acha o servidor sozinho por UDP;
+  - isola o painel;
+  - bloqueia navegação para fora;
+  - troca de servidor;
+  - aceita o IP digitado.
+
+  O `.exe` (NSIS) foi gerado aqui com wine, com ícone e metadados conferidos.
+- **App:** 94 testes Jest (descoberta e QR, reducer e geometria do mapa, renderização da cena, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
+- **Não verificado aqui:**
+  - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
+  - o `.exe` não rodou num **Windows de verdade**;
+  - a descoberta não foi testada num **Wi-Fi real** com celulares;
+  - a imagem Docker não foi gerada (Docker Hub bloqueado aqui).
 
 ## Próximos passos sugeridos
 
-1. Revisar os pacotes SRD contra o texto oficial e publicar a política de privacidade, os termos e a página web de exclusão de conta.
-2. Painel de moderação para `content_reports` e SafeSearch no upload de retratos.
-3. Pacote **Old Dragon 2** (CC-BY-SA, pt-BR) e dados Fudge/paradas de d6 no motor para Fate, Year Zero e Forged in the Dark.
-4. Push (FCM) para avisar o Mestre com o app em segundo plano. Isso pede `POST_NOTIFICATIONS` e a atualização do Data Safety.
-5. Tela de preferências (sons, haptics, D6 padrão/numérico persistido).
+1. Testar numa sessão real: instalar o servidor, o `.exe` e o APK e jogar uma cena com o grupo.
+2. Névoa de guerra e régua de distância no mapa; iniciativa (ordem de turno) no painel.
+3. Anunciar o servidor por mDNS (`rpgplay.local`) para quem não quer IP fixo.
+4. Pacote **Old Dragon 2** (CC-BY-SA, pt-BR) e dados Fudge/paradas de d6 para Fate, Year Zero e Forged in the Dark.

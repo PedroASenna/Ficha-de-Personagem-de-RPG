@@ -1,5 +1,7 @@
 # Checklist da Google Play Store: RPG Play
 
+> **Referência, não usado na distribuição atual.** O RPG Play hoje é instalado direto (APK, .exe, .deb) com o servidor na rede de casa: veja [INSTALACAO.md](../INSTALACAO.md). Este documento fica para o caso de um dia publicar na Google Play.
+
 O checklist cobre as políticas que mais pesam para este tipo de app: câmera/fotos, conteúdo gerado por usuário (UGC), dados pessoais, IP de sistemas de RPG e requisitos técnicos. As datas e regras foram conferidas em setembro/2026 (fontes no fim). Revise antes de cada envio: as políticas mudam com frequência.
 
 Legenda: ✅ já implementado no código · 🟡 depende de configuração no Play Console ou de material externo · ⬜ pendente.
