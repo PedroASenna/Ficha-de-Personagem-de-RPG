@@ -1,17 +1,18 @@
-import Constants from 'expo-constants';
+import { currentServerUrl, useServer } from '../state/server';
 
-type Extra = { apiUrl?: string; privacyPolicyUrl?: string; termsUrl?: string; accountDeletionUrl?: string };
+/** Base HTTP do servidor da casa escolhido (ex.: http://192.168.0.20:8080). */
+export function apiUrl(): string {
+  return currentServerUrl();
+}
 
-const extra = (Constants.expoConfig?.extra ?? {}) as Extra;
+export function wsUrl(): string {
+  return apiUrl().replace(/^http/, 'ws');
+}
 
-export const API_URL = (extra.apiUrl ?? 'http://10.0.2.2:8080').replace(/\/$/, '');
-export const WS_URL = API_URL.replace(/^http/, 'ws');
-export const PRIVACY_POLICY_URL = extra.privacyPolicyUrl ?? 'https://rpgplay.app/privacidade';
-export const TERMS_URL = extra.termsUrl ?? 'https://rpgplay.app/termos';
-export const ACCOUNT_DELETION_URL = extra.accountDeletionUrl ?? 'https://rpgplay.app/excluir-conta';
-
-/** Em dev a API devolve caminhos relativos (/media/...); em produção, URLs assinadas do GCS. */
+/** O servidor devolve caminhos relativos (/media/...); a imagem vem do mesmo servidor. */
 export function absoluteUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
-  return url.startsWith('/') ? `${API_URL}${url}` : url;
+  if (!url.startsWith('/')) return url;
+  const base = useServer.getState().server?.url;
+  return base ? `${base}${url}` : undefined;
 }

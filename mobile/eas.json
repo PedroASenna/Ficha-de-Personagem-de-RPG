@@ -1,29 +1,17 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "http://10.0.2.2:8080" }
+      "android": { "buildType": "apk" }
     },
-    "preview": {
+    "apk": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api-staging.rpgplay.app" }
-    },
-    "production": {
-      "autoIncrement": true,
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.rpgplay.app" }
-    }
-  },
-  "submit": {
-    "production": {
-      "android": { "track": "internal", "releaseStatus": "draft" }
+      "android": { "buildType": "apk" }
     }
   }
 }

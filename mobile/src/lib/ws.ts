@@ -4,7 +4,7 @@
  */
 import { useSession } from '../state/session';
 import { ensureFreshToken } from './api';
-import { WS_URL } from './config';
+import { wsUrl } from './config';
 import type { HpChangedMsg, RollResultMsg, ServerMessage } from './types';
 
 export type SocketStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
@@ -40,7 +40,7 @@ export class RoomSocket {
   connect() {
     this.closedByUser = false;
     this.onStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
-    const ws = new WebSocket(`${WS_URL}/ws/rooms/${encodeURIComponent(this.pin)}`);
+    const ws = new WebSocket(`${wsUrl()}/ws/rooms/${encodeURIComponent(this.pin)}`);
     this.ws = ws;
 
     ws.onopen = () => {

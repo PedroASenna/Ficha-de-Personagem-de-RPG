@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Card, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
@@ -14,7 +14,8 @@ export default function RoomsScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { data: rooms } = useRooms();
-  const [pin, setPin] = useState('');
+  const params = useLocalSearchParams<{ pin?: string }>();
+  const [pin, setPin] = useState((params.pin ?? '').toUpperCase().replace(PIN_CHARS, '').slice(0, 6));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,9 +58,16 @@ export default function RoomsScreen() {
         </Card.Actions>
       </Card>
 
-      <Button mode="outlined" icon="crown" onPress={() => router.push('/room/create')}>
-        Sou o Mestre: criar mesa
+      <Button mode="contained-tonal" icon="qrcode-scan" onPress={() => router.push('/scan')}>
+        Ler QR code da mesa
       </Button>
+
+      <Button mode="text" icon="crown" onPress={() => router.push('/room/create')}>
+        Sou o Mestre: criar mesa pelo celular
+      </Button>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: -8 }}>
+        Para o mapa, as cenas e os inimigos, o Mestre usa o programa RPG Play Mestre no PC.
+      </Text>
 
       {rooms && rooms.length > 0 ? (
         <View style={{ gap: 8 }}>

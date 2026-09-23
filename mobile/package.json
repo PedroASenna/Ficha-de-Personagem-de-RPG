@@ -1,6 +1,6 @@
 {
   "name": "rpg-play",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
@@ -9,12 +9,14 @@
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",
     "expo-build-properties": "~57.0.21",
+    "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.19",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-image-manipulator": "~57.0.19",
     "expo-image-picker": "~57.0.19",
     "expo-linking": "~57.0.10",
+    "expo-network": "~57.0.2",
     "expo-router": "~57.0.22",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
@@ -49,7 +51,9 @@
     "test": "jest",
     "lint": "expo lint",
     "export:android": "expo export --platform android",
-    "gen:sfx": "python3 scripts/gen_sfx.py"
+    "gen:sfx": "python3 scripts/gen_sfx.py",
+    "prebuild:android": "expo prebuild --platform android --clean",
+    "apk": "expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease"
   },
   "private": true,
   "jest": {

@@ -1,10 +1,12 @@
 /**
  * Mesa sincronizada. Jogadores rolam e aplicam dano/cura; o Mestre recebe cada evento em tempo
  * real (notificação + log da sessão) e pode alterar o PV de qualquer personagem da mesa.
+ * A aba "Mapa" mostra a cena onde está o boneco do jogador (só o Mestre move os bonecos, no PC).
  */
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Avatar,
   Banner,
@@ -28,16 +30,20 @@ import { Screen } from '../../components/common/Screen';
 import { DicePicker } from '../../components/dice/DicePicker';
 import { DiceTray } from '../../components/dice/DiceTray';
 import { HPBar } from '../../components/hud/HPBar';
+import { SceneView } from '../../components/table/SceneView';
 import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
 import { PALETTES } from '../../lib/dice/effects';
 import { playHaptic, playHpFeedback } from '../../lib/feedback';
 import { useCharacters } from '../../lib/queries';
-import type { Room, RoomMember, ServerMessage, SessionEvent } from '../../lib/types';
+import { emptyTable, orderedTokens, tableReducer, type TableState } from '../../lib/table';
+import type { Room, RoomMember, ServerMessage, SessionEvent, TableToken } from '../../lib/types';
 import { RoomSocket, SocketStatus } from '../../lib/ws';
 import { useSession } from '../../state/session';
 
 type LogEntry = { id: string; text: string; color?: string; secret?: boolean };
+
+const CONDITION_COLOR = { ileso: '#62C370', ferido: '#E3A13B', muito_ferido: '#E0584A', caido: '#8A8078' } as const;
 
 function toLogEntry(event: SessionEvent): LogEntry {
   const tier = event.payload.outcome?.tier;
@@ -67,6 +73,9 @@ export default function RoomScreen() {
   const [hpAmount, setHpAmount] = useState('');
   const [hpKind, setHpKind] = useState<'damage' | 'heal' | 'temp'>('damage');
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [view, setView] = useState<'table' | 'map'>('table');
+  const [table, setTable] = useState<TableState>(emptyTable);
+  const [selectedToken, setSelectedToken] = useState<TableToken | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
 
   const myUserId = me?.id;
@@ -75,6 +84,8 @@ export default function RoomScreen() {
 
   const handleMessage = useCallback(
     (msg: ServerMessage) => {
+      setTable((t) => tableReducer(t, msg));
+      if (msg.type === 'view.reset') setNotice('O Mestre levou você para outra cena.');
       switch (msg.type) {
         case 'welcome':
           setRoom(msg.room);
@@ -176,10 +187,98 @@ export default function RoomScreen() {
     }
   };
 
+  const viewSwitch = (
+    <SegmentedButtons
+      value={view}
+      onValueChange={(v) => setView(v as 'table' | 'map')}
+      buttons={[
+        { value: 'table', label: 'Mesa', icon: 'dice-d20' },
+        { value: 'map', label: 'Mapa', icon: 'map' },
+      ]}
+    />
+  );
+
+  const tokens = orderedTokens(table);
+  const selectedMember = selectedToken?.character_id ? table.party.find((p) => p.id === selectedToken.character_id) : undefined;
+  const selectedNpc = selectedToken?.npc_id ? table.npcs[selectedToken.npc_id] : undefined;
+
+  if (view === 'map') {
+    return (
+      <>
+        <Stack.Screen options={{ title: room ? room.name : `Mesa ${pin}` }} />
+        <SafeAreaView edges={['bottom']} style={[styles.mapRoot, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.mapHeader}>
+            {viewSwitch}
+            {table.scene ? (
+              <Text variant="titleMedium" style={{ textAlign: 'center' }}>
+                {table.scene.name}
+              </Text>
+            ) : null}
+          </View>
+          {table.scene ? (
+            <SceneView
+              scene={table.scene}
+              tokens={tokens}
+              npcs={table.npcs}
+              party={table.party}
+              myCharacterId={myMember?.character?.id}
+              selectedId={selectedToken?.id}
+              onSelect={setSelectedToken}
+            />
+          ) : (
+            <View style={styles.mapEmpty}>
+              <Text variant="titleMedium">Você ainda não está no mapa</Text>
+              <Text style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+                {table.role === 'master'
+                  ? 'Crie as cenas e posicione os bonecos pelo programa RPG Play Mestre no PC.'
+                  : 'Quando o Mestre colocar seu personagem numa cena, o mapa aparece aqui.'}
+              </Text>
+            </View>
+          )}
+          {selectedToken && (selectedMember || selectedNpc) ? (
+            <Card mode="elevated" style={styles.tokenCard} onPress={() => setSelectedToken(null)}>
+              <Card.Title
+                title={selectedMember?.name ?? selectedNpc?.name}
+                subtitle={
+                  selectedMember
+                    ? [selectedMember.class_name, `Nv ${selectedMember.level}`].filter(Boolean).join(' · ')
+                    : 'Inimigo'
+                }
+                left={(props) =>
+                  (selectedMember?.portrait_url ?? selectedNpc?.portrait_url) ? (
+                    <Avatar.Image {...props} source={{ uri: absoluteUrl(selectedMember?.portrait_url ?? selectedNpc?.portrait_url) }} />
+                  ) : (
+                    <Avatar.Text {...props} label={(selectedMember?.name ?? selectedNpc?.name ?? '?').slice(0, 1).toUpperCase()} />
+                  )
+                }
+                right={() =>
+                  selectedNpc ? (
+                    <Chip style={{ marginRight: 12, backgroundColor: CONDITION_COLOR[selectedNpc.condition] }} textStyle={{ color: '#14100D' }}>
+                      {selectedNpc.condition_label}
+                    </Chip>
+                  ) : null
+                }
+              />
+              {selectedMember ? (
+                <Card.Content>
+                  <HPBar current={selectedMember.hp_current} max={selectedMember.hp_max} temp={selectedMember.hp_temp} height={16} />
+                </Card.Content>
+              ) : null}
+            </Card>
+          ) : null}
+        </SafeAreaView>
+        <Snackbar visible={!!notice} onDismiss={() => setNotice(null)} duration={3500}>
+          {notice ?? ''}
+        </Snackbar>
+      </>
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={{ title: room ? room.name : `Mesa ${pin}` }} />
       <Screen>
+        {viewSwitch}
         <Banner visible={status === 'reconnecting' || !!closedReason} icon={closedReason ? 'door-closed' : 'wifi-off'} actions={closedReason ? [{ label: 'Sair', onPress: () => router.back() }] : []}>
           {closedReason ?? 'Reconectando à mesa…'}
         </Banner>
@@ -334,6 +433,10 @@ export default function RoomScreen() {
 }
 
 const styles = StyleSheet.create({
+  mapRoot: { flex: 1 },
+  mapHeader: { padding: 12, gap: 8 },
+  mapEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
+  tokenCard: { position: 'absolute', left: 12, right: 12, bottom: 16 },
   header: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   hpButtons: { flexDirection: 'row', justifyContent: 'flex-end' },
   secretRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

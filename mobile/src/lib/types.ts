@@ -5,7 +5,7 @@ export type UUID = string;
 
 export type TokenPair = { access_token: string; refresh_token: string; expires_in: number };
 
-export type User = { id: UUID; email: string; display_name: string; locale: string; created_at: string };
+export type User = { id: UUID; username: string; display_name: string; locale: string; is_admin: boolean; created_at: string };
 
 export type RulesetStatus = 'available' | 'planned' | 'restricted';
 
@@ -168,7 +168,56 @@ export type SessionEvent = {
 
 // ---- Mensagens do WebSocket (backend/app/ws/protocol.py) ----
 type Base = { v: number; ts: string };
-export type WelcomeMsg = Base & { type: 'welcome'; room: Room; log: SessionEvent[] };
+// ---------- mesa virtual (backend/app/services/table.py) ----------
+
+export type Scene = {
+  id: UUID;
+  name: string;
+  map_url: string | null;
+  map_width: number;
+  map_height: number;
+  grid_size: number;
+  grid_visible: boolean;
+  sort_order: number;
+};
+
+export type TableToken = {
+  id: UUID;
+  scene_id: UUID;
+  character_id: UUID | null;
+  npc_id: UUID | null;
+  x: number;
+  y: number;
+  size: number;
+  hidden: boolean;
+  z: number;
+  version: number;
+};
+
+export type NpcCondition = 'ileso' | 'ferido' | 'muito_ferido' | 'caido';
+
+/** O que o jogador sabe de um inimigo: nome, imagem e um estado vago. */
+export type PublicNpc = { id: UUID; name: string; portrait_url: string | null; condition: NpcCondition; condition_label: string };
+
+export type PartyMember = {
+  id: UUID;
+  owner_id: UUID;
+  name: string;
+  class_name: string | null;
+  ancestry_name: string | null;
+  level: number;
+  portrait_url: string | null;
+  hp_current: number;
+  hp_max: number;
+  hp_temp: number;
+  version: number;
+};
+
+export type TableView =
+  | { role: 'player'; scene: Scene | null; tokens: TableToken[]; npcs: PublicNpc[]; party: PartyMember[] }
+  | { role: 'master'; scenes: Scene[]; tokens: TableToken[]; npcs: PublicNpc[]; party: PartyMember[] };
+
+export type WelcomeMsg = Base & { type: 'welcome'; room: Room; log: SessionEvent[]; table: TableView };
 export type PresenceMsg = Base & { type: 'presence'; user_id: UUID; display_name: string; online: boolean };
 export type RollResultMsg = Base & {
   type: 'roll.result';
@@ -208,4 +257,13 @@ export type ServerMessage =
   | ErrorMsg
   | (Base & { type: 'pong' })
   | (Base & { type: 'member.kicked'; user_id: UUID })
-  | (Base & { type: 'room.closed' });
+  | (Base & { type: 'room.closed' })
+  | (Base & { type: 'view.reset'; table: TableView })
+  | (Base & { type: 'scene.upserted'; scene: Scene })
+  | (Base & { type: 'scene.deleted'; scene_id: UUID })
+  | (Base & { type: 'token.upserted'; token: TableToken; npc?: PublicNpc })
+  | (Base & { type: 'token.moved'; token_id: UUID; x: number; y: number; version: number })
+  | (Base & { type: 'token.deleted'; token_id: UUID })
+  | (Base & { type: 'npc.upserted'; npc: PublicNpc })
+  | (Base & { type: 'npc.deleted'; npc_id: UUID })
+  | (Base & { type: 'party.updated'; party: PartyMember[] });

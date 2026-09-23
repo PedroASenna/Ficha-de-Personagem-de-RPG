@@ -1,6 +1,6 @@
 /** Cliente HTTP da API com renovação automática do token (refresh rotativo). */
 import { useSession } from '../state/session';
-import { API_URL } from './config';
+import { apiUrl } from './config';
 import type {
   AttributeMethod,
   Character,
@@ -31,7 +31,7 @@ async function refreshTokens(): Promise<boolean> {
   const { refreshToken, setTokens, signOut } = useSession.getState();
   if (!refreshToken) return false;
   try {
-    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+    const res = await fetch(`${apiUrl()}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
@@ -63,7 +63,7 @@ async function request<T>(path: string, { method = 'GET', body, form, auth = tru
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/api/v1${path}`, {
+    res = await fetch(`${apiUrl()}/api/v1${path}`, {
       method,
       headers,
       body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
@@ -86,10 +86,12 @@ async function request<T>(path: string, { method = 'GET', body, form, auth = tru
 }
 
 export const api = {
-  register: (body: { email: string; password: string; display_name: string; age_confirmed: boolean; accept_terms: boolean }) =>
+  register: (body: { username: string; password: string; display_name: string }) =>
     request<TokenPair>('/auth/register', { method: 'POST', body, auth: false }),
-  login: (email: string, password: string) =>
-    request<TokenPair>('/auth/login', { method: 'POST', body: { email, password }, auth: false }),
+  login: (username: string, password: string) =>
+    request<TokenPair>('/auth/login', { method: 'POST', body: { username, password }, auth: false }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<void>('/auth/password', { method: 'POST', body: { current_password, new_password } }),
   logout: (refresh_token: string) => request<void>('/auth/logout', { method: 'POST', body: { refresh_token }, auth: false }),
 
   me: () => request<User>('/me'),

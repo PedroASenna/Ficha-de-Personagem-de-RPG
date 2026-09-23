@@ -1,11 +1,17 @@
 import { backoffDelay, RoomSocket } from '../src/lib/ws';
+import { useServer } from '../src/state/server';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),
   setItemAsync: jest.fn(async () => undefined),
   deleteItemAsync: jest.fn(async () => undefined),
 }));
-jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { apiUrl: 'http://api.test' } } } }));
+
+beforeEach(() => {
+  useServer.setState({
+    server: { url: 'http://api.test', name: 'Casa', version: '0.2.0', serverId: 's1', registrationOpen: true },
+  });
+});
 
 
 describe('backoffDelay', () => {
