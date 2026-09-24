@@ -17,9 +17,9 @@ flowchart LR
 
 | Peça | Arquivo | Quem usa |
 |---|---|---|
-| Servidor | `rpgplay-server_0.2.0_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.2.0.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
-| Programa do Mestre | `RPG-Play-Mestre-Setup-0.2.0.exe` (Windows) ou `rpgplay-mestre_0.2.0_amd64.deb` (Linux) | O Mestre, no PC |
-| App dos jogadores | `RPG-Play-0.2.0.apk` | Cada jogador, no celular Android |
+| Servidor | `rpgplay-server_0.3.1_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.3.1.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
+| Programa do Mestre | `RPG-Play-Mestre-Setup-0.3.1.exe` (Windows) ou `rpgplay-mestre_0.3.1_amd64.deb` (Linux) | O Mestre, no PC |
+| App dos jogadores | `RPG-Play-0.3.1.apk` | Cada jogador, no celular Android |
 
 Baixe todos na página **[Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest)** do projeto.
 
@@ -36,7 +36,7 @@ Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador).
 ### Instalar
 
 ```bash
-sudo apt install ./rpgplay-server_0.2.0_amd64.deb
+sudo apt install ./rpgplay-server_0.3.1_amd64.deb
 ```
 
 No fim, o instalador mostra os endereços, por exemplo:
@@ -167,7 +167,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 
 ### Windows
 
-1. Rode `RPG-Play-Mestre-Setup-0.2.0.exe`.
+1. Rode `RPG-Play-Mestre-Setup-0.3.1.exe`.
 2. O Windows pode avisar "O Windows protegeu o computador" (o instalador não tem certificado pago de assinatura). Clique em **Mais informações → Executar assim mesmo**.
 3. Escolha a pasta e conclua. O atalho "RPG Play Mestre" aparece no menu Iniciar e na área de trabalho.
 4. Se o Firewall do Windows perguntar, permita o acesso em **redes privadas** (é assim que ele acha o servidor).
@@ -175,7 +175,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 ### Linux
 
 ```bash
-sudo apt install ./rpgplay-mestre_0.2.0_amd64.deb
+sudo apt install ./rpgplay-mestre_0.3.1_amd64.deb
 ```
 
 O "RPG Play Mestre" aparece no menu de aplicativos.
@@ -190,7 +190,7 @@ Ao abrir, o programa procura o servidor na rede e já entra no painel do Mestre.
 
 ### Instalar o APK
 
-1. Passe o arquivo `RPG-Play-0.2.0.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
+1. Passe o arquivo `RPG-Play-0.3.1.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
 2. Toque no arquivo. O Android pede para **permitir a instalação de apps desta fonte**: autorize para o app que você usou para abrir o arquivo (Arquivos, Chrome, WhatsApp...).
 3. Se o **Play Protect** avisar que o app é desconhecido, toque em **Mais detalhes → Instalar mesmo assim**. Isso aparece porque o app não veio da Play Store.
 

@@ -1,7 +1,7 @@
 {
   "name": "rpgplay-mestre",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Painel do Mestre (mesa virtual) servido pelo servidor RPG Play em /mestre",
   "type": "module",
   "scripts": {
