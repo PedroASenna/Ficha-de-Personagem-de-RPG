@@ -1,6 +1,7 @@
 /**
  * Mapa da cena para o jogador: só olhar. Pinça para zoom, arrastar para mover, toque duplo volta ao
  * enquadramento, toque num boneco mostra quem é. Quem move os bonecos é o Mestre, no PC.
+ * Com névoa de guerra, tudo que o personagem ainda não explorou fica preto.
  */
 import { useCallback, useMemo, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
@@ -11,8 +12,8 @@ import Svg, { Circle, ClipPath, Defs, G, Image as SvgImage, Path, Rect, Text as 
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { absoluteUrl } from '../../lib/config';
-import { fitScale, gridPath, screenToMap, tokenAt, tokenRadius } from '../../lib/table';
-import type { PartyMember, PublicNpc, Scene, TableToken } from '../../lib/types';
+import { fitScale, fogPath, gridPath, isExplored, screenToMap, tokenAt, tokenRadius } from '../../lib/table';
+import type { PartyMember, PublicNpc, Scene, SceneImage, SceneObject, TableToken } from '../../lib/types';
 
 const PARTY_RING = '#4FB3A9';
 const ENEMY_RING = '#E0584A';
@@ -22,6 +23,10 @@ const MAX_ZOOM = 6;
 type Props = {
   scene: Scene;
   tokens: TableToken[];
+  images?: SceneImage[];
+  objects?: SceneObject[];
+  /** Bits explorados pelo meu personagem; null = cena sem névoa. */
+  fog?: Uint8Array | null;
   npcs: Record<string, PublicNpc>;
   party: PartyMember[];
   myCharacterId?: string | null;
@@ -70,15 +75,17 @@ function TokenShape({
               <Circle r={r - stroke / 2} />
             </ClipPath>
           </Defs>
-          <SvgImage
-            href={{ uri: image }}
-            x={-r}
-            y={-r}
-            width={2 * r}
-            height={2 * r}
-            preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#${clipId})`}
-          />
+          <G clipPath={`url(#${clipId})`}>
+            <SvgImage
+              href={{ uri: image }}
+              x={-r}
+              y={-r}
+              width={2 * r}
+              height={2 * r}
+              preserveAspectRatio="xMidYMid slice"
+              transform={token.rotation ? `rotate(${token.rotation})` : undefined}
+            />
+          </G>
         </>
       ) : (
         <SvgText y={r * 0.25} fontSize={r * 0.7} fontWeight="bold" fill="#F3E3BF" textAnchor="middle">
@@ -101,7 +108,54 @@ function TokenShape({
   );
 }
 
-export function SceneView({ scene, tokens, npcs, party, myCharacterId, selectedId, onSelect }: Props) {
+function PieceShape({ piece }: { piece: SceneImage }) {
+  return (
+    <G transform={`translate(${piece.x} ${piece.y}) rotate(${piece.rotation})`}>
+      <SvgImage
+        href={{ uri: absoluteUrl(piece.url) }}
+        x={-piece.width / 2}
+        y={-piece.height / 2}
+        width={piece.width}
+        height={piece.height}
+        preserveAspectRatio="none"
+      />
+    </G>
+  );
+}
+
+function ObjectShape({ obj }: { obj: SceneObject }) {
+  const font = Math.max(12, Math.min(22, obj.height * 0.14));
+  return (
+    <G transform={`translate(${obj.x} ${obj.y}) rotate(${obj.rotation})`}>
+      {obj.url ? (
+        <SvgImage
+          href={{ uri: absoluteUrl(obj.url) }}
+          x={-obj.width / 2}
+          y={-obj.height / 2}
+          width={obj.width}
+          height={obj.height}
+          preserveAspectRatio="none"
+        />
+      ) : (
+        <Rect
+          x={-obj.width / 2}
+          y={-obj.height / 2}
+          width={obj.width}
+          height={obj.height}
+          rx={Math.min(obj.width, obj.height) * 0.12}
+          fill="rgba(122,86,48,0.55)"
+          stroke="#C79A58"
+          strokeWidth={3}
+        />
+      )}
+      <SvgText y={-obj.height / 2 - font * 0.5} fontSize={font} fontWeight="bold" fill="#F3E3BF" stroke="#14100D" strokeWidth={font * 0.15} textAnchor="middle">
+        {obj.name}
+      </SvgText>
+    </G>
+  );
+}
+
+export function SceneView({ scene, tokens, images = [], objects = [], fog = null, npcs, party, myCharacterId, selectedId, onSelect }: Props) {
   const theme = useTheme();
   const [area, setArea] = useState({ width: 0, height: 0 });
   const scale = useSharedValue(1);
@@ -118,12 +172,28 @@ export function SceneView({ scene, tokens, npcs, party, myCharacterId, selectedI
     [scene.grid_visible, scene.map_width, scene.map_height, scene.grid_size],
   );
 
+  const fogOn = scene.fog_enabled && fog !== null;
+  const darkness = useMemo(
+    () => (fogOn && fog ? fogPath(fog, scene.fog_cols, scene.fog_rows, scene.fog_cell) : ''),
+    [fogOn, fog, scene.fog_cols, scene.fog_rows, scene.fog_cell],
+  );
+  // Bonecos debaixo da névoa não respondem ao toque (o jogador não sabe que estão lá).
+  const tappable = useMemo(() => {
+    if (!fogOn || !fog) return tokens;
+    return tokens.filter((t) => {
+      if (myCharacterId && t.character_id === myCharacterId) return true;
+      const col = Math.floor(t.x / scene.fog_cell);
+      const row = Math.floor(t.y / scene.fog_cell);
+      return col >= 0 && row >= 0 && col < scene.fog_cols && row < scene.fog_rows && isExplored(fog, row * scene.fog_cols + col);
+    });
+  }, [fogOn, fog, tokens, myCharacterId, scene.fog_cell, scene.fog_cols, scene.fog_rows]);
+
   const handleTap = useCallback(
     (x: number, y: number, currentTx: number, currentTy: number, currentScale: number) => {
       const point = screenToMap({ x, y }, map, area, { tx: currentTx, ty: currentTy, scale: currentScale });
-      onSelect(tokenAt(point, tokens, scene.grid_size));
+      onSelect(tokenAt(point, tappable, scene.grid_size));
     },
-    [map, area, tokens, scene.grid_size, onSelect],
+    [map, area, tappable, scene.grid_size, onSelect],
   );
 
   const gesture = useMemo(() => {
@@ -186,7 +256,13 @@ export function SceneView({ scene, tokens, npcs, party, myCharacterId, selectedI
                 ) : (
                   <Rect width={map.width} height={map.height} fill="#3B3026" />
                 )}
+                {images.map((piece) => (
+                  <PieceShape key={piece.id} piece={piece} />
+                ))}
                 {grid ? <Path d={grid} stroke="rgba(15,10,6,0.45)" strokeWidth={1 / base} /> : null}
+                {objects.map((obj) => (
+                  <ObjectShape key={obj.id} obj={obj} />
+                ))}
                 <Rect width={map.width} height={map.height} fill="none" stroke={theme.colors.primary} strokeOpacity={0.35} strokeWidth={2 / base} />
                 {tokens.map((token) => {
                   const member = token.character_id ? partyById[token.character_id] : undefined;
@@ -205,6 +281,7 @@ export function SceneView({ scene, tokens, npcs, party, myCharacterId, selectedI
                     />
                   );
                 })}
+                {darkness ? <Path d={darkness} fill="#000" testID="fog" /> : null}
               </Svg>
             </Animated.View>
           </View>

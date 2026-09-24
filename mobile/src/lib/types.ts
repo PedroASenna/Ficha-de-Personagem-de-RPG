@@ -59,12 +59,17 @@ export type RulesetPack = {
     manual: { min: number; max: number };
   };
   ancestry_label: string;
+  background_label: string;
   ancestries: Ancestry[];
   classes: CharacterClass[];
   backgrounds: Background[];
   background_bonus: { strategy: 'none' | 'plus2_plus1' };
   allow_custom: boolean;
+  /** Sistemas livres: pontos de atributo digitados para raça/origem personalizadas. */
+  custom_bonus: { min: number; max: number } | null;
+  custom_required: ('ancestry' | 'background')[];
   hp: { strategy: 'hit_die_max_plus_mod' | 'fixed' | 'manual' };
+  level_up: { max_level: number; asi_levels: number[]; asi_points: number; attribute_max: number | null; free_points: boolean };
   dice: { default_check: string; direction: 'high' | 'low'; generic_crits: boolean; crit_rules: { sides: number; success: number[]; failure: number[] }[] };
 };
 
@@ -93,6 +98,7 @@ export type Character = {
   ancestry_key: string | null;
   ancestry_name: string | null;
   ancestry_choices: string[];
+  ancestry_bonus: Record<string, number>;
   class_key: string | null;
   class_name: string | null;
   background_key: string | null;
@@ -102,7 +108,14 @@ export type Character = {
   attributes: Record<string, number>;
   modifiers: Record<string, number>;
   attribute_method: AttributeMethod | null;
-  attribute_audit: { method?: string; base?: Record<string, number>; bonuses?: Record<string, number>; rolls?: RollPayload[] };
+  attribute_audit: {
+    method?: string;
+    base?: Record<string, number>;
+    bonuses?: Record<string, number>;
+    rolls?: RollPayload[];
+    advancement?: Record<string, number>;
+    level_ups?: { level: number; attributes: Record<string, number>; hp: number | null }[];
+  };
   hp_max: number;
   hp_current: number;
   hp_temp: number;
@@ -158,7 +171,7 @@ export type Room = {
 
 export type SessionEvent = {
   id: number;
-  type: 'dice_roll' | 'hp_change' | 'join' | 'leave' | 'rest' | 'system';
+  type: 'dice_roll' | 'hp_change' | 'join' | 'leave' | 'rest' | 'level_up' | 'system';
   visibility: 'public' | 'master_only';
   actor_user_id: UUID | null;
   character_id: UUID | null;
@@ -179,6 +192,69 @@ export type Scene = {
   grid_size: number;
   grid_visible: boolean;
   sort_order: number;
+  fog_enabled: boolean;
+  fog_radius: number;
+  fog_cols: number;
+  fog_rows: number;
+  fog_cell: number;
+};
+
+/** Peça de cenário (várias por cena): posição pelo centro, tamanho e rotação em graus (horário). */
+export type SceneImage = {
+  id: UUID;
+  scene_id: UUID;
+  url: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z: number;
+  version: number;
+};
+
+/** Objeto que carrega bonecos (carroça, barco, jaula). */
+export type SceneObject = {
+  id: UUID;
+  scene_id: UUID;
+  name: string;
+  url: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z: number;
+  hide_occupants: boolean;
+  version: number;
+};
+
+/** O que o personagem do jogador já explorou na cena (bits em base64). */
+export type PlayerFog = { scene_id: UUID; character_id: UUID; explored: string };
+
+export type FactionKind = 'nation' | 'faction';
+export type RelationKind = 'alliance' | 'friendly' | 'neutral' | 'tense' | 'war';
+export type PublicFaction = {
+  id: UUID;
+  kind: FactionKind;
+  name: string;
+  emblem_url: string | null;
+  color: string;
+  leader: string;
+  seat: string;
+  description: string;
+  parent_id: UUID | null;
+  sort_order: number;
+};
+export type PublicRelation = { id: UUID; a_id: UUID; b_id: UUID; kind: RelationKind; note: string };
+/** Mapa-múndi como o jogador vê: só o que o Mestre revelou. */
+export type PublicWorld = {
+  map_url: string | null;
+  map_width: number | null;
+  map_height: number | null;
+  visible: boolean;
+  factions: PublicFaction[];
+  relations: PublicRelation[];
 };
 
 export type TableToken = {
@@ -191,6 +267,8 @@ export type TableToken = {
   size: number;
   hidden: boolean;
   z: number;
+  rotation: number;
+  container_id: UUID | null;
   version: number;
 };
 
@@ -214,8 +292,27 @@ export type PartyMember = {
 };
 
 export type TableView =
-  | { role: 'player'; scene: Scene | null; tokens: TableToken[]; npcs: PublicNpc[]; party: PartyMember[] }
-  | { role: 'master'; scenes: Scene[]; tokens: TableToken[]; npcs: PublicNpc[]; party: PartyMember[] };
+  | {
+      role: 'player';
+      scene: Scene | null;
+      tokens: TableToken[];
+      npcs: PublicNpc[];
+      images?: SceneImage[];
+      objects?: SceneObject[];
+      fog?: PlayerFog | null;
+      party: PartyMember[];
+      world?: PublicWorld;
+    }
+  | {
+      role: 'master';
+      scenes: Scene[];
+      tokens: TableToken[];
+      npcs: PublicNpc[];
+      images?: SceneImage[];
+      objects?: SceneObject[];
+      party: PartyMember[];
+      world?: PublicWorld;
+    };
 
 export type WelcomeMsg = Base & { type: 'welcome'; room: Room; log: SessionEvent[]; table: TableView };
 export type PresenceMsg = Base & { type: 'presence'; user_id: UUID; display_name: string; online: boolean };
@@ -266,4 +363,23 @@ export type ServerMessage =
   | (Base & { type: 'token.deleted'; token_id: UUID })
   | (Base & { type: 'npc.upserted'; npc: PublicNpc })
   | (Base & { type: 'npc.deleted'; npc_id: UUID })
-  | (Base & { type: 'party.updated'; party: PartyMember[] });
+  | (Base & { type: 'party.updated'; party: PartyMember[] })
+  | (Base & { type: 'image.upserted'; image: SceneImage })
+  | (Base & { type: 'image.deleted'; image_id: UUID })
+  | (Base & { type: 'object.upserted'; object: SceneObject; tokens: { token_id: UUID; x: number; y: number; version: number }[] })
+  | (Base & { type: 'object.deleted'; object_id: UUID })
+  | (Base & { type: 'fog.revealed'; scene_id: UUID; character_id: UUID; cells: number[] })
+  | (Base & { type: 'fog.reset'; scene_id: UUID; character_id: UUID | null })
+  | (Base & { type: 'world.updated'; world: PublicWorld })
+  | (Base & {
+      type: 'character.leveled';
+      event_id: number;
+      character: { id: UUID; name: string };
+      level: number;
+      hp_gain: number;
+      hp_current: number;
+      hp_max: number;
+      hp_temp: number;
+      version: number;
+      summary: string;
+    });

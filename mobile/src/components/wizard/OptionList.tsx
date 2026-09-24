@@ -43,7 +43,7 @@ export function OptionList({ options, selected, onSelect, allowCustom, customNam
       {allowCustom ? (
         <Card mode={selected === 'custom' ? 'contained' : 'outlined'} onPress={() => onSelect('custom')}>
           <Card.Title title="Personalizado" subtitle="Homebrew ou algo fora da lista" />
-          {selected === 'custom' ? (
+          {selected === 'custom' && onCustomName ? (
             <Card.Content>
               <TextInput mode="outlined" label="Nome" value={customName ?? ''} onChangeText={onCustomName} maxLength={60} />
             </Card.Content>

@@ -8,13 +8,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, HelperText, Portal, RadioButton, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 
+import { RotateImageDialog } from '../../components/common/RotateImageDialog';
 import { Screen } from '../../components/common/Screen';
 import { AttributeStep } from '../../components/wizard/AttributeStep';
+import { CustomChoice } from '../../components/wizard/CustomChoice';
 import { OptionList } from '../../components/wizard/OptionList';
 import { WizardProgress } from '../../components/wizard/WizardProgress';
 import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
-import { choosePortrait, PortraitSource } from '../../lib/portrait';
+import { pickPortrait, PortraitSource, uploadPortrait } from '../../lib/portrait';
 import { keys, useRulesetPack, useRulesets } from '../../lib/queries';
 import type { AttributeMethod, Character } from '../../lib/types';
 
@@ -30,11 +32,13 @@ export default function NewCharacterScreen() {
   const [draft, setDraft] = useState<Character | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [name, setName] = useState('');
-  const [customName, setCustomName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraRationale, setCameraRationale] = useState(false);
   const [bonusMode, setBonusMode] = useState<'21' | '111'>('21');
+  // Qual passo está com o cartão "Personalizado" aberto (raça/origem digitadas).
+  const [customOpen, setCustomOpen] = useState<'ancestry' | 'background' | null>(null);
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
 
   const { data: pack } = useRulesetPack(rulesetId);
 
@@ -45,7 +49,7 @@ export default function NewCharacterScreen() {
     if (pack?.ancestries.length || pack?.allow_custom) list.push({ id: 'ancestry', label: pack?.ancestry_label ?? 'Raça' });
     list.push({ id: 'class', label: 'Classe' });
     list.push({ id: 'attributes', label: 'Atributos' });
-    if (pack?.backgrounds.length || pack?.allow_custom) list.push({ id: 'background', label: 'Antecedente' });
+    if (pack?.backgrounds.length || pack?.allow_custom) list.push({ id: 'background', label: pack?.background_label ?? 'Antecedente' });
     list.push({ id: 'review', label: 'Revisão' });
     return list;
   }, [pack, params.rulesetId, params.draftId]);
@@ -97,9 +101,18 @@ export default function NewCharacterScreen() {
     setStepIndex((i) => Math.min(i + 1, steps.length - 1));
   };
 
-  const pickPortrait = async (source: PortraitSource) => {
+  // Foto: escolher e cortar → ajustar o ângulo → enviar (o servidor gira) → salvar na ficha.
+  const choosePhoto = async (source: PortraitSource) => {
     setCameraRationale(false);
-    const result = await run(() => choosePortrait(source));
+    const local = await run(() => pickPortrait(source));
+    if (local) setPendingPhoto(local);
+  };
+
+  const savePhoto = async (rotation: number) => {
+    const local = pendingPhoto;
+    if (!local) return;
+    const result = await run(() => uploadPortrait(local, rotation));
+    setPendingPhoto(null);
     if (result && draft) await patch({ portrait_key: result.portraitKey });
     else if (result && !draft) {
       const c = await run(() => api.createDraft(rulesetId!, name || 'Sem nome'));
@@ -134,7 +147,7 @@ export default function NewCharacterScreen() {
     (step.id === 'ancestry' && !!draft?.ancestry_key) ||
     (step.id === 'class' && !!draft?.class_key) ||
     (step.id === 'attributes' && Object.keys(draft?.attributes ?? {}).length > 0) ||
-    step.id === 'background';
+    (step.id === 'background' && (!pack?.custom_required.includes('background') || !!draft?.background_key));
 
   return (
     <Screen>
@@ -158,7 +171,7 @@ export default function NewCharacterScreen() {
             </View>
           )}
           <View style={styles.row}>
-            <Button icon="image" mode="outlined" onPress={() => pickPortrait('library')} disabled={busy}>
+            <Button icon="image" mode="outlined" onPress={() => choosePhoto('library')} disabled={busy}>
               Galeria
             </Button>
             <Button icon="camera" mode="outlined" onPress={() => setCameraRationale(true)} disabled={busy}>
@@ -171,24 +184,38 @@ export default function NewCharacterScreen() {
 
       {step.id === 'ancestry' && pack ? (
         <>
-          <OptionList
-            options={pack.ancestries.map((a) => ({
-              key: a.key,
-              name: a.name,
-              description: a.description,
-              tags: [
-                ...Object.entries(a.bonuses).map(([k, v]) => `${pack.attributes.find((x) => x.key === k)?.abbr} +${v}`),
-                ...(a.speed ? [`${a.speed} pés`] : []),
-              ],
-            }))}
-            selected={draft?.ancestry_key ?? null}
-            onSelect={(key) => (key === 'custom' ? setCustomName('') : void patch({ ancestry_key: key }))}
-            allowCustom={pack.allow_custom}
-            customName={customName}
-            onCustomName={setCustomName}
-          />
-          {pack.allow_custom && customName ? (
-            <Button onPress={() => patch({ ancestry_key: 'custom', ancestry_name: customName })}>Usar “{customName}”</Button>
+          {pack.ancestries.length > 0 ? (
+            <OptionList
+              options={pack.ancestries.map((a) => ({
+                key: a.key,
+                name: a.name,
+                description: a.description,
+                tags: [
+                  ...Object.entries(a.bonuses).map(([k, v]) => `${pack.attributes.find((x) => x.key === k)?.abbr} +${v}`),
+                  ...(a.speed ? [`${a.speed} pés`] : []),
+                ],
+              }))}
+              selected={customOpen === 'ancestry' ? 'custom' : (draft?.ancestry_key ?? null)}
+              onSelect={(key) => (key === 'custom' ? setCustomOpen('ancestry') : (setCustomOpen(null), void patch({ ancestry_key: key })))}
+              allowCustom={pack.allow_custom}
+            />
+          ) : (
+            <Text style={{ color: theme.colors.onSurfaceVariant }}>
+              Neste sistema você mesmo define a {pack.ancestry_label.toLowerCase()} do personagem e os pontos de atributo que ela dá.
+            </Text>
+          )}
+          {pack.allow_custom && (customOpen === 'ancestry' || draft?.ancestry_key === 'custom' || pack.ancestries.length === 0) ? (
+            <CustomChoice
+              key={`ancestry-${draft?.id ?? 'novo'}`}
+              label={pack.ancestry_label}
+              pack={pack}
+              initialName={draft?.ancestry_key === 'custom' ? (draft.ancestry_name ?? '') : ''}
+              initialPoints={draft?.ancestry_key === 'custom' ? draft.ancestry_bonus : {}}
+              busy={busy}
+              onSave={(customName, points) =>
+                void patch({ ancestry_key: 'custom', ancestry_name: customName, ...(pack.custom_bonus ? { ancestry_bonus: points } : {}) })
+              }
+            />
           ) : null}
           {ancestry?.bonus_choices ? (
             <View style={{ gap: 6 }}>
@@ -237,16 +264,30 @@ export default function NewCharacterScreen() {
 
       {step.id === 'background' && pack ? (
         <>
-          <OptionList
-            options={pack.backgrounds.map((b) => ({ key: b.key, name: b.name, description: b.description, tags: b.skills }))}
-            selected={draft?.background_key ?? null}
-            onSelect={(key) => (key === 'custom' ? setCustomName('') : void patch({ background_key: key }))}
-            allowCustom={pack.allow_custom}
-            customName={customName}
-            onCustomName={setCustomName}
-          />
-          {pack.allow_custom && customName ? (
-            <Button onPress={() => patch({ background_key: 'custom', background_name: customName })}>Usar “{customName}”</Button>
+          {pack.backgrounds.length > 0 ? (
+            <OptionList
+              options={pack.backgrounds.map((b) => ({ key: b.key, name: b.name, description: b.description, tags: b.skills }))}
+              selected={customOpen === 'background' ? 'custom' : (draft?.background_key ?? null)}
+              onSelect={(key) => (key === 'custom' ? setCustomOpen('background') : (setCustomOpen(null), void patch({ background_key: key })))}
+              allowCustom={pack.allow_custom}
+            />
+          ) : (
+            <Text style={{ color: theme.colors.onSurfaceVariant }}>
+              Defina a {pack.background_label.toLowerCase()} do personagem (de onde veio, o que fazia) e os pontos de atributo que ela dá.
+            </Text>
+          )}
+          {pack.allow_custom && (customOpen === 'background' || draft?.background_key === 'custom' || pack.backgrounds.length === 0) ? (
+            <CustomChoice
+              key={`background-${draft?.id ?? 'novo'}`}
+              label={pack.background_label}
+              pack={pack}
+              initialName={draft?.background_key === 'custom' ? (draft.background_name ?? '') : ''}
+              initialPoints={draft?.background_key === 'custom' ? draft.background_bonus : {}}
+              busy={busy}
+              onSave={(customName, points) =>
+                void patch({ background_key: 'custom', background_name: customName, ...(pack.custom_bonus ? { background_bonus: points } : {}) })
+              }
+            />
           ) : null}
           {pack.background_bonus.strategy === 'plus2_plus1' && background ? (
             <View style={{ gap: 8 }}>
@@ -290,6 +331,14 @@ export default function NewCharacterScreen() {
         <View style={{ gap: 8 }}>
           <Text variant="headlineSmall">{draft.name}</Text>
           <Text>{[draft.ancestry_name, draft.class_name, draft.background_name].filter(Boolean).join(' · ')}</Text>
+          {draft.attribute_audit.bonuses && Object.keys(draft.attribute_audit.bonuses).length > 0 ? (
+            <Text style={{ color: theme.colors.onSurfaceVariant }}>
+              Bônus:{' '}
+              {Object.entries(draft.attribute_audit.bonuses)
+                .map(([k, v]) => `${pack?.attributes.find((a) => a.key === k)?.abbr ?? k} ${v > 0 ? '+' : ''}${v}`)
+                .join('  ')}
+            </Text>
+          ) : null}
           <Text>
             {pack?.attributes.map((a) => `${a.abbr} ${draft.attributes[a.key] ?? '-'}`).join('   ')}
           </Text>
@@ -312,6 +361,7 @@ export default function NewCharacterScreen() {
         )}
       </View>
 
+      <RotateImageDialog key={pendingPhoto ?? 'nenhuma'} uri={pendingPhoto} busy={busy} onCancel={() => setPendingPhoto(null)} onConfirm={(r) => void savePhoto(r)} />
       <Portal>
         <Dialog visible={cameraRationale} onDismiss={() => setCameraRationale(false)}>
           <Dialog.Title>Usar a câmera?</Dialog.Title>
@@ -322,7 +372,7 @@ export default function NewCharacterScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setCameraRationale(false)}>Agora não</Button>
-            <Button onPress={() => pickPortrait('camera')}>Continuar</Button>
+            <Button onPress={() => choosePhoto('camera')}>Continuar</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

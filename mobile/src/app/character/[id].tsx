@@ -26,9 +26,10 @@ import {
 
 import { Screen } from '../../components/common/Screen';
 import { HPBar } from '../../components/hud/HPBar';
+import { LevelUpDialog } from '../../components/sheet/LevelUpDialog';
 import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
-import { playHpFeedback } from '../../lib/feedback';
+import { playHaptic, playHpFeedback } from '../../lib/feedback';
 import { keys, useCharacter, useRulesetPack } from '../../lib/queries';
 import type { Character } from '../../lib/types';
 import { hud } from '../../theme/theme';
@@ -52,6 +53,8 @@ export default function CharacterSheetScreen() {
   const [abilityName, setAbilityName] = useState('');
   const [abilityUses, setAbilityUses] = useState('1');
   const [abilityRecharge, setAbilityRecharge] = useState<'short_rest' | 'long_rest'>('long_rest');
+  const [levelDialog, setLevelDialog] = useState(false);
+  const [leveling, setLeveling] = useState(false);
 
   const setCached = (c: Character) => queryClient.setQueryData(keys.character(id), c);
 
@@ -102,7 +105,13 @@ export default function CharacterSheetScreen() {
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
               {[character.ancestry_name, character.class_name, `nível ${character.level}`].filter(Boolean).join(' · ')}
             </Text>
+            {character.background_name ? <Text style={{ color: theme.colors.onSurfaceVariant }}>{character.background_name}</Text> : null}
           </View>
+          {character.status === 'complete' && pack ? (
+            <Button mode="contained-tonal" icon="arrow-up-bold-circle" compact onPress={() => setLevelDialog(true)} accessibilityLabel="Subir de nível">
+              Nível
+            </Button>
+          ) : null}
         </View>
 
         {/* ---- HP ---- */}
@@ -238,6 +247,26 @@ export default function CharacterSheetScreen() {
         {error ? <HelperText type="error">{error}</HelperText> : null}
       </Screen>
 
+      {pack ? (
+        <LevelUpDialog
+          key={`${character.level}-${levelDialog}`}
+          visible={levelDialog}
+          character={character}
+          pack={pack}
+          busy={leveling}
+          onDismiss={() => setLevelDialog(false)}
+          onConfirm={async (body) => {
+            setLeveling(true);
+            await act(async () => {
+              const updated = await api.levelUp(character.id, { ...body, expected_version: character.version });
+              playHaptic('success_heavy');
+              setLevelDialog(false);
+              return updated;
+            });
+            setLeveling(false);
+          }}
+        />
+      ) : null}
       <Portal>
         <Dialog visible={itemDialog} onDismiss={() => setItemDialog(false)}>
           <Dialog.Title>Novo item</Dialog.Title>

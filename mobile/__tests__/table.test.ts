@@ -1,4 +1,17 @@
-import { emptyTable, fitScale, fromView, gridPath, orderedTokens, screenToMap, tableReducer, tokenAt } from '../src/lib/table';
+import {
+  decodeBits,
+  emptyTable,
+  fitScale,
+  fogPath,
+  fromView,
+  gridPath,
+  isExplored,
+  orderedImages,
+  orderedTokens,
+  screenToMap,
+  tableReducer,
+  tokenAt,
+} from '../src/lib/table';
 import type { PartyMember, PublicNpc, Scene, ServerMessage, TableToken, TableView } from '../src/lib/types';
 
 const base = { v: 1, ts: '2026-09-23T20:00:00Z' };
@@ -12,6 +25,11 @@ const floresta: Scene = {
   grid_size: 50,
   grid_visible: true,
   sort_order: 0,
+  fog_enabled: false,
+  fog_radius: 4,
+  fog_cols: 40,
+  fog_rows: 20,
+  fog_cell: 25,
 };
 
 const token = (id: string, extra: Partial<TableToken> = {}): TableToken => ({
@@ -24,6 +42,8 @@ const token = (id: string, extra: Partial<TableToken> = {}): TableToken => ({
   size: 1,
   hidden: false,
   z: 0,
+  rotation: 0,
+  container_id: null,
   version: 1,
   ...extra,
 });
@@ -155,5 +175,64 @@ describe('geometria do mapa', () => {
   it('desenha a grade num caminho só', () => {
     expect(gridPath(150, 100, 50)).toBe('M50 0V100M100 0V100M0 50H150');
     expect(gridPath(150, 100, 2)).toBe('');
+  });
+});
+
+
+describe('cenário, objetos, névoa e mundo', () => {
+  const msg = (m: object) => ({ ...base, ...m }) as ServerMessage;
+
+  it('peças de cenário da minha cena, em ordem de empilhamento', () => {
+    let state = loaded();
+    const piece = { id: 'p1', scene_id: 'floresta', url: '/media/p1.png', x: 10, y: 10, width: 50, height: 80, rotation: 45, z: 2, version: 1 };
+    state = tableReducer(state, msg({ type: 'image.upserted', image: piece }));
+    state = tableReducer(state, msg({ type: 'image.upserted', image: { ...piece, id: 'p0', z: 1 } }));
+    state = tableReducer(state, msg({ type: 'image.upserted', image: { ...piece, id: 'outra', scene_id: 'caverna' } }));
+    expect(orderedImages(state).map((p) => p.id)).toEqual(['p0', 'p1']);
+    state = tableReducer(state, msg({ type: 'image.deleted', image_id: 'p0' }));
+    expect(Object.keys(state.images)).toEqual(['p1']);
+  });
+
+  it('objeto andando leva os bonecos que eu vejo dentro', () => {
+    const cart = { id: 'cart', scene_id: 'floresta', name: 'Carroça', url: null, x: 100, y: 100, width: 140, height: 90, rotation: 0, z: 0, hide_occupants: false, version: 2 };
+    const state = tableReducer(loaded(), msg({ type: 'object.upserted', object: cart, tokens: [{ token_id: 't-lyra', x: 300, y: 90, version: 5 }] }));
+    expect(state.objects.cart?.name).toBe('Carroça');
+    expect(state.tokens['t-lyra']).toMatchObject({ x: 300, y: 90, version: 5 });
+    expect(tableReducer(state, msg({ type: 'object.deleted', object_id: 'cart' })).objects).toEqual({});
+  });
+
+  it('névoa: só a do meu personagem, com células novas e cobrir de novo', () => {
+    const fogged: TableView = {
+      ...playerView,
+      scene: { ...floresta, fog_enabled: true },
+      fog: { scene_id: 'floresta', character_id: 'lyra', explored: btoa(String.fromCharCode(0b11)) },
+    };
+    let state = tableReducer(emptyTable, msg({ type: 'view.reset', table: fogged }));
+    expect(state.fog && [0, 1, 2].map((i) => isExplored(state.fog!, i))).toEqual([true, true, false]);
+    state = tableReducer(state, msg({ type: 'fog.revealed', scene_id: 'floresta', character_id: 'lyra', cells: [2, 799] }));
+    expect(isExplored(state.fog!, 2) && isExplored(state.fog!, 799)).toBe(true);
+    expect(state.fog).toHaveLength(100); // 40 × 20 células
+    state = tableReducer(state, msg({ type: 'fog.reset', scene_id: 'floresta', character_id: 'lyra' }));
+    expect(Array.from(state.fog!).every((b) => b === 0)).toBe(true);
+    // Cena sem névoa: nada de dados.
+    expect(tableReducer(emptyTable, msg({ type: 'view.reset', table: { ...fogged, scene: floresta } })).fog).toBeNull();
+  });
+
+  it('caminho da névoa junta células vizinhas da mesma linha', () => {
+    const bits = decodeBits(btoa(String.fromCharCode(0b0110)));
+    // 4 colunas × 1 linha: exploradas 1 e 2 → escuro na 0 e na 3.
+    expect(fogPath(bits, 4, 1, 10)).toBe('M0 0h10.5v10.5h-10.5zM30 0h10.5v10.5h-10.5z');
+    expect(fogPath(new Uint8Array(1), 4, 1, 10)).toBe('M0 0h40.5v10.5h-40.5z');
+  });
+
+  it('mundo e nível chegam pelo WebSocket', () => {
+    const world = { map_url: '/media/mundo.jpg', map_width: 800, map_height: 500, visible: true, factions: [], relations: [] };
+    let state = tableReducer(loaded(), msg({ type: 'world.updated', world }));
+    expect(state.world?.map_url).toBe('/media/mundo.jpg');
+    state = tableReducer(
+      state,
+      msg({ type: 'character.leveled', event_id: 3, character: { id: 'lyra', name: 'Lyra' }, level: 2, hp_gain: 6, hp_current: 16, hp_max: 16, hp_temp: 0, version: 4, summary: '' }),
+    );
+    expect(state.party[0]).toMatchObject({ level: 2, hp_max: 16 });
   });
 });

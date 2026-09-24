@@ -2,17 +2,68 @@
  * Mapa do jogador (só leitura): a cena onde está o boneco dele, com os bonecos visíveis.
  * Reducer puro dos eventos do WebSocket + geometria do mapa (enquadrar, converter toque, achar boneco).
  */
-import type { PartyMember, PublicNpc, Scene, ServerMessage, TableToken, TableView } from './types';
+import type { PartyMember, PublicNpc, PublicWorld, Scene, SceneImage, SceneObject, ServerMessage, TableToken, TableView } from './types';
 
 export type TableState = {
   role: 'player' | 'master' | null;
   scene: Scene | null;
   tokens: Record<string, TableToken>;
   npcs: Record<string, PublicNpc>;
+  images: Record<string, SceneImage>;
+  objects: Record<string, SceneObject>;
+  /** O que o meu personagem explorou nesta cena (null = sem névoa). */
+  fog: Uint8Array | null;
   party: PartyMember[];
+  world: PublicWorld | null;
 };
 
-export const emptyTable: TableState = { role: null, scene: null, tokens: {}, npcs: {}, party: [] };
+export const emptyTable: TableState = { role: null, scene: null, tokens: {}, npcs: {}, images: {}, objects: {}, fog: null, party: [], world: null };
+
+// ---------- névoa ----------
+
+export function decodeBits(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bits = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bits[i] = binary.charCodeAt(i);
+  return bits;
+}
+
+export function isExplored(bits: Uint8Array, index: number): boolean {
+  return ((bits[index >> 3] ?? 0) & (1 << (index & 7))) !== 0;
+}
+
+function withCells(bits: Uint8Array | null, cells: number[], length: number): Uint8Array {
+  const next = new Uint8Array(Math.max(length, bits?.length ?? 0));
+  if (bits) next.set(bits);
+  for (const index of cells) {
+    const byte = index >> 3;
+    if (byte < next.length) next[byte] = (next[byte] ?? 0) | (1 << (index & 7));
+  }
+  return next;
+}
+
+/**
+ * Caminho SVG cobrindo as células NÃO exploradas (preto para o jogador). Células vizinhas numa
+ * mesma linha viram um retângulo só, para o desenho ficar leve mesmo em mapas grandes.
+ */
+export function fogPath(bits: Uint8Array, cols: number, rows: number, cell: number): string {
+  const parts: string[] = [];
+  for (let row = 0; row < rows; row++) {
+    let start = -1;
+    for (let col = 0; col <= cols; col++) {
+      const hidden = col < cols && !isExplored(bits, row * cols + col);
+      if (hidden && start < 0) start = col;
+      if (!hidden && start >= 0) {
+        const x = start * cell;
+        const y = row * cell;
+        // Um pouquinho de sobra evita frestas entre linhas vizinhas no antialias.
+        parts.push(`M${x} ${y}h${(col - start) * cell + 0.5}v${cell + 0.5}h${-((col - start) * cell + 0.5)}z`);
+        start = -1;
+      }
+    }
+  }
+  return parts.join('');
+}
 
 function indexBy<T extends { id: string }>(items: T[]): Record<string, T> {
   return Object.fromEntries(items.map((item) => [item.id, item]));
@@ -26,18 +77,34 @@ function without<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 export function fromView(view: TableView): TableState {
+  const world = view.world ?? null;
   if (view.role === 'master') {
     // O Mestre usa o painel do PC; no celular ele vê a primeira cena, só para conferir.
     const scene = [...view.scenes].sort((a, b) => a.sort_order - b.sort_order)[0] ?? null;
+    const inScene = <T extends { scene_id: string }>(items: T[] | undefined) => (items ?? []).filter((i) => i.scene_id === scene?.id);
     return {
       role: 'master',
       scene,
       tokens: indexBy(view.tokens.filter((t) => t.scene_id === scene?.id && !t.hidden)),
       npcs: indexBy(view.npcs),
+      images: indexBy(inScene(view.images)),
+      objects: indexBy(inScene(view.objects)),
+      fog: null,
       party: view.party,
+      world,
     };
   }
-  return { role: 'player', scene: view.scene, tokens: indexBy(view.tokens), npcs: indexBy(view.npcs), party: view.party };
+  return {
+    role: 'player',
+    scene: view.scene,
+    tokens: indexBy(view.tokens),
+    npcs: indexBy(view.npcs),
+    images: indexBy(view.images ?? []),
+    objects: indexBy(view.objects ?? []),
+    fog: view.scene?.fog_enabled && view.fog ? decodeBits(view.fog.explored) : null,
+    party: view.party,
+    world,
+  };
 }
 
 export function tableReducer(state: TableState, msg: ServerMessage): TableState {
@@ -70,6 +137,43 @@ export function tableReducer(state: TableState, msg: ServerMessage): TableState 
     }
     case 'party.updated':
       return { ...state, party: msg.party };
+    case 'image.upserted':
+      if (msg.image.scene_id !== state.scene?.id) return state;
+      return { ...state, images: { ...state.images, [msg.image.id]: msg.image } };
+    case 'image.deleted':
+      return { ...state, images: without(state.images, msg.image_id) };
+    case 'object.upserted': {
+      if (msg.object.scene_id !== state.scene?.id) return state;
+      let tokens = state.tokens;
+      for (const moved of msg.tokens) {
+        const token = tokens[moved.token_id];
+        if (token && moved.version >= token.version) tokens = { ...tokens, [token.id]: { ...token, x: moved.x, y: moved.y, version: moved.version } };
+      }
+      return { ...state, tokens, objects: { ...state.objects, [msg.object.id]: msg.object } };
+    }
+    case 'object.deleted':
+      return { ...state, objects: without(state.objects, msg.object_id) };
+    case 'fog.revealed': {
+      const scene = state.scene;
+      if (!scene || msg.scene_id !== scene.id || !scene.fog_enabled) return state;
+      return { ...state, fog: withCells(state.fog, msg.cells, Math.ceil((scene.fog_cols * scene.fog_rows) / 8)) };
+    }
+    case 'fog.reset': {
+      const scene = state.scene;
+      if (!scene || msg.scene_id !== scene.id || !scene.fog_enabled) return state;
+      return { ...state, fog: new Uint8Array(Math.ceil((scene.fog_cols * scene.fog_rows) / 8)) };
+    }
+    case 'world.updated':
+      return { ...state, world: msg.world };
+    case 'character.leveled':
+      return {
+        ...state,
+        party: state.party.map((p) =>
+          p.id === msg.character.id
+            ? { ...p, level: msg.level, hp_current: msg.hp_current, hp_max: msg.hp_max, hp_temp: msg.hp_temp, version: msg.version }
+            : p,
+        ),
+      };
     case 'hp.changed':
       return {
         ...state,
@@ -80,6 +184,14 @@ export function tableReducer(state: TableState, msg: ServerMessage): TableState 
     default:
       return state;
   }
+}
+
+export function orderedImages(state: TableState): SceneImage[] {
+  return Object.values(state.images).sort((a, b) => a.z - b.z);
+}
+
+export function orderedObjects(state: TableState): SceneObject[] {
+  return Object.values(state.objects).sort((a, b) => a.z - b.z);
 }
 
 /** Bonecos de baixo para cima (maior z por cima; personagens por cima de inimigos no empate). */

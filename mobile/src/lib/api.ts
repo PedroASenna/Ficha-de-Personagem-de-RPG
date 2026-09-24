@@ -104,7 +104,7 @@ export const api = {
   characters: () => request<Character[]>('/characters'),
   character: (id: string) => request<Character>(`/characters/${id}`),
   createDraft: (ruleset_id: string, name: string) => request<Character>('/characters', { method: 'POST', body: { ruleset_id, name } }),
-  quickCreate: (body: { ruleset_id: string; name: string; ancestry_key?: string; class_key?: string }) =>
+  quickCreate: (body: { ruleset_id: string; name: string; ancestry_key?: string; class_key?: string; ancestry_name?: string; background_name?: string }) =>
     request<Character>('/characters/quick', { method: 'POST', body }),
   patchCharacter: (id: string, body: Record<string, unknown>) => request<Character>(`/characters/${id}`, { method: 'PATCH', body }),
   generateAttributes: (id: string, method: AttributeMethod, scores?: Record<string, number>) =>
@@ -116,6 +116,8 @@ export const api = {
       method: 'POST',
       body: { delta, kind, expected_version },
     }),
+  levelUp: (id: string, body: { attributes: Record<string, number>; hp_gain: number | null; expected_version?: number }) =>
+    request<Character>(`/characters/${id}/level-up`, { method: 'POST', body }),
   rest: (id: string, type: 'short' | 'long') => request<Character>(`/characters/${id}/rest`, { method: 'POST', body: { type } }),
   useSpellSlot: (id: string, level: string) => request<Character>(`/characters/${id}/spell-slots/${level}/use`, { method: 'POST' }),
   addItem: (id: string, body: { name: string; quantity: number; weight_each: string }) =>
@@ -141,10 +143,11 @@ export const api = {
     request<{ id: string }>('/reports', { method: 'POST', body: { target_type, target_id, reason, details } }),
   block: (user_id: string) => request<void>('/blocks', { method: 'POST', body: { user_id } }),
 
-  uploadPortrait: (uri: string) => {
+  /** `rotation`: graus no sentido horário; o servidor gira a foto antes de gravar. */
+  uploadPortrait: (uri: string, rotation = 0) => {
     const form = new FormData();
     // React Native aceita { uri, name, type } como arquivo no FormData.
     form.append('file', { uri, name: 'retrato.jpg', type: 'image/jpeg' } as unknown as Blob);
-    return request<{ portrait_key: string; url: string }>('/uploads/portrait', { method: 'POST', form });
+    return request<{ portrait_key: string; url: string }>(`/uploads/portrait?rotation=${Math.round(rotation)}`, { method: 'POST', form });
   },
 };

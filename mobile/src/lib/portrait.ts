@@ -38,11 +38,14 @@ async function normalize(uri: string): Promise<string> {
   return saved.uri;
 }
 
-/** Fluxo completo: escolher → cortar → reduzir → enviar. Retorna a chave para salvar na ficha. */
-export async function choosePortrait(source: PortraitSource): Promise<{ portraitKey: string; url: string; localUri: string } | null> {
+/** Escolher → cortar → reduzir. Devolve a foto local, pronta para ajustar o ângulo e enviar. */
+export async function pickPortrait(source: PortraitSource): Promise<string | null> {
   const picked = await pick(source);
-  if (!picked) return null;
-  const localUri = await normalize(picked);
-  const { portrait_key, url } = await api.uploadPortrait(localUri);
-  return { portraitKey: portrait_key, url, localUri };
+  return picked ? normalize(picked) : null;
+}
+
+/** Envia a foto; `rotation` (graus, horário) é aplicada pelo servidor. Retorna a chave para a ficha. */
+export async function uploadPortrait(localUri: string, rotation = 0): Promise<{ portraitKey: string; url: string }> {
+  const { portrait_key, url } = await api.uploadPortrait(localUri, rotation);
+  return { portraitKey: portrait_key, url };
 }

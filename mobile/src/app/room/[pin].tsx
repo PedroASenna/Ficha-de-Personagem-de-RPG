@@ -31,12 +31,13 @@ import { DicePicker } from '../../components/dice/DicePicker';
 import { DiceTray } from '../../components/dice/DiceTray';
 import { HPBar } from '../../components/hud/HPBar';
 import { SceneView } from '../../components/table/SceneView';
+import { WorldView } from '../../components/table/WorldView';
 import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
 import { PALETTES } from '../../lib/dice/effects';
 import { playHaptic, playHpFeedback } from '../../lib/feedback';
 import { useCharacters } from '../../lib/queries';
-import { emptyTable, orderedTokens, tableReducer, type TableState } from '../../lib/table';
+import { emptyTable, orderedImages, orderedObjects, orderedTokens, tableReducer, type TableState } from '../../lib/table';
 import type { Room, RoomMember, ServerMessage, SessionEvent, TableToken } from '../../lib/types';
 import { RoomSocket, SocketStatus } from '../../lib/ws';
 import { useSession } from '../../state/session';
@@ -73,19 +74,30 @@ export default function RoomScreen() {
   const [hpAmount, setHpAmount] = useState('');
   const [hpKind, setHpKind] = useState<'damage' | 'heal' | 'temp'>('damage');
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [view, setView] = useState<'table' | 'map'>('table');
+  const [view, setView] = useState<'table' | 'map' | 'world'>('table');
   const [table, setTable] = useState<TableState>(emptyTable);
   const [selectedToken, setSelectedToken] = useState<TableToken | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
+  const sceneIdRef = useRef<string | null>(null);
 
   const myUserId = me?.id;
   const iAmMaster = room?.my_role === 'master';
   const myMember = room?.members.find((m) => m.user_id === myUserId) ?? room?.members.find((m) => m.role === room.my_role);
+  const myCharacterIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    myCharacterIdRef.current = myMember?.character?.id ?? null;
+  }, [myMember?.character?.id]);
 
   const handleMessage = useCallback(
     (msg: ServerMessage) => {
       setTable((t) => tableReducer(t, msg));
-      if (msg.type === 'view.reset') setNotice('O Mestre levou você para outra cena.');
+      if (msg.type === 'welcome' || msg.type === 'view.reset') {
+        // view.reset também chega quando o Mestre liga a névoa ou esconde quem está numa carroça:
+        // só avisa quando a cena realmente mudou.
+        const next = msg.table.role === 'player' ? (msg.table.scene?.id ?? null) : null;
+        if (msg.type === 'view.reset' && next !== sceneIdRef.current && next) setNotice('O Mestre levou você para outra cena.');
+        sceneIdRef.current = next;
+      }
       switch (msg.type) {
         case 'welcome':
           setRoom(msg.room);
@@ -118,6 +130,15 @@ export default function RoomScreen() {
           );
           if (msg.actor.user_id !== myUserId) setNotice(msg.summary);
           break;
+        case 'character.leveled':
+          setLog((l) => [{ id: String(msg.event_id), text: msg.summary, color: '#F2C14E' }, ...l].slice(0, 200));
+          setNotice(msg.summary);
+          playHaptic('success_heavy');
+          if (msg.character.id === myCharacterIdRef.current) void refetchCharacters();
+          break;
+        case 'world.updated':
+          setNotice('O Mestre atualizou o mapa do mundo.');
+          break;
         case 'member.kicked':
           setRoom((r) => r && { ...r, members: r.members.filter((m) => m.user_id !== msg.user_id) });
           break;
@@ -126,7 +147,7 @@ export default function RoomScreen() {
           break;
       }
     },
-    [myUserId],
+    [myUserId, refetchCharacters],
   );
 
   useEffect(() => {
@@ -190,10 +211,11 @@ export default function RoomScreen() {
   const viewSwitch = (
     <SegmentedButtons
       value={view}
-      onValueChange={(v) => setView(v as 'table' | 'map')}
+      onValueChange={(v) => setView(v as 'table' | 'map' | 'world')}
       buttons={[
         { value: 'table', label: 'Mesa', icon: 'dice-d20' },
         { value: 'map', label: 'Mapa', icon: 'map' },
+        { value: 'world', label: 'Mundo', icon: 'earth' },
       ]}
     />
   );
@@ -219,6 +241,9 @@ export default function RoomScreen() {
             <SceneView
               scene={table.scene}
               tokens={tokens}
+              images={orderedImages(table)}
+              objects={orderedObjects(table)}
+              fog={table.fog}
               npcs={table.npcs}
               party={table.party}
               myCharacterId={myMember?.character?.id}
@@ -267,6 +292,21 @@ export default function RoomScreen() {
             </Card>
           ) : null}
         </SafeAreaView>
+        <Snackbar visible={!!notice} onDismiss={() => setNotice(null)} duration={3500}>
+          {notice ?? ''}
+        </Snackbar>
+      </>
+    );
+  }
+
+  if (view === 'world') {
+    return (
+      <>
+        <Stack.Screen options={{ title: room ? room.name : `Mesa ${pin}` }} />
+        <Screen>
+          {viewSwitch}
+          <WorldView world={table.world} />
+        </Screen>
         <Snackbar visible={!!notice} onDismiss={() => setNotice(null)} duration={3500}>
           {notice ?? ''}
         </Snackbar>
