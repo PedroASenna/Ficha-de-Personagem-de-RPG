@@ -205,6 +205,11 @@ def compute_hp_max(
 
 def carry_capacity(pack: RulesetPack, attributes: Mapping[str, int]) -> tuple[float, str]:
     rule = pack.carry
+    if rule.strategy == "basic_lift":
+        # GURPS: Base de Carga (ST²/10 kg); até ela o personagem está sem carga.
+        st = attributes.get(rule.attribute or "", 10)
+        value = st * st / 10
+        return (float(int(value + 0.5)) if value >= 5 else round(value, 1)), rule.unit
     if rule.strategy == "attribute_multiplier":
         return float(attributes.get(rule.attribute or "", 0) * (rule.multiplier or 0)), rule.unit
     return float(rule.value or 0), rule.unit

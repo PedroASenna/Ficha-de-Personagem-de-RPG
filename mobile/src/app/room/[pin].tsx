@@ -27,6 +27,7 @@ import {
 } from 'react-native-paper';
 
 import { Screen } from '../../components/common/Screen';
+import { CheckPicker, checkRequest, type ActiveCheck } from '../../components/dice/CheckPicker';
 import { DicePicker } from '../../components/dice/DicePicker';
 import { DiceTray } from '../../components/dice/DiceTray';
 import { HPBar } from '../../components/hud/HPBar';
@@ -36,7 +37,7 @@ import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
 import { PALETTES } from '../../lib/dice/effects';
 import { playHaptic, playHpFeedback } from '../../lib/feedback';
-import { useCharacters } from '../../lib/queries';
+import { useCharacter, useCharacters } from '../../lib/queries';
 import { emptyTable, orderedImages, orderedObjects, orderedTokens, tableReducer, type TableState } from '../../lib/table';
 import type { Room, RoomMember, ServerMessage, SessionEvent, TableToken } from '../../lib/types';
 import { RoomSocket, SocketStatus } from '../../lib/ws';
@@ -83,6 +84,8 @@ export default function RoomScreen() {
   const myUserId = me?.id;
   const iAmMaster = room?.my_role === 'master';
   const myMember = room?.members.find((m) => m.user_id === myUserId) ?? room?.members.find((m) => m.role === room.my_role);
+  // Testes prontos da ficha (GURPS e Savage Worlds): o servidor já calculou NH e dados.
+  const { data: mySheet, refetch: refetchMySheet } = useCharacter(myMember?.character?.id);
   const myCharacterIdRef = useRef<string | null>(null);
   useEffect(() => {
     myCharacterIdRef.current = myMember?.character?.id ?? null;
@@ -134,7 +137,10 @@ export default function RoomScreen() {
           setLog((l) => [{ id: String(msg.event_id), text: msg.summary, color: '#F2C14E' }, ...l].slice(0, 200));
           setNotice(msg.summary);
           playHaptic('success_heavy');
-          if (msg.character.id === myCharacterIdRef.current) void refetchCharacters();
+          if (msg.character.id === myCharacterIdRef.current) {
+            void refetchCharacters();
+            void refetchMySheet();
+          }
           break;
         case 'world.updated':
           setNotice('O Mestre atualizou o mapa do mundo.');
@@ -147,7 +153,7 @@ export default function RoomScreen() {
           break;
       }
     },
-    [myUserId, refetchCharacters],
+    [myUserId, refetchCharacters, refetchMySheet],
   );
 
   useEffect(() => {
@@ -161,14 +167,25 @@ export default function RoomScreen() {
     return () => socket.close();
   }, [pin, handleMessage]);
 
+  const [activeCheck, setActiveCheck] = useState<ActiveCheck | null>(null);
+  const request = useMemo(() => (activeCheck ? checkRequest(activeCheck) : null), [activeCheck]);
+
   const roll = useCallback(
     async (n: string) => {
       const socket = socketRef.current;
       if (!socket) throw new Error('Sem conexão com a mesa.');
-      const msg = await socket.requestRoll(n, { characterId: myMember?.character?.id, secret });
-      return { roll: msg.roll, outcome: msg.outcome };
+      const msg = request
+        ? await socket.requestRoll(request.notation, {
+            characterId: myMember?.character?.id,
+            secret,
+            target: request.target,
+            wild: request.wild,
+            label: request.label,
+          })
+        : await socket.requestRoll(n, { characterId: myMember?.character?.id, secret });
+      return { roll: msg.roll, outcome: msg.outcome, check: msg.check };
     },
-    [myMember?.character?.id, secret],
+    [myMember?.character?.id, secret, request],
   );
 
   const eligible = useMemo(
@@ -266,7 +283,7 @@ export default function RoomScreen() {
                 title={selectedMember?.name ?? selectedNpc?.name}
                 subtitle={
                   selectedMember
-                    ? [selectedMember.class_name, `Nv ${selectedMember.level}`].filter(Boolean).join(' · ')
+                    ? [selectedMember.class_name, selectedMember.level_label ?? `Nv ${selectedMember.level}`].filter(Boolean).join(' · ')
                     : 'Inimigo'
                 }
                 left={(props) =>
@@ -407,12 +424,24 @@ export default function RoomScreen() {
 
         <Divider />
         <Text variant="titleMedium">Rolar para a mesa</Text>
-        <DicePicker onChange={setNotation} />
+        {mySheet?.sheet?.checks.length ? (
+          <>
+            <Text variant="titleSmall">Testes da ficha</Text>
+            <CheckPicker checks={mySheet.sheet.checks} active={activeCheck} onChange={setActiveCheck} />
+          </>
+        ) : null}
+        {!activeCheck ? <DicePicker onChange={setNotation} /> : null}
         <View style={styles.secretRow}>
           <Text>{iAmMaster ? 'Rolagem escondida dos jogadores' : 'Só o Mestre vê o resultado'}</Text>
           <Switch value={secret} onValueChange={setSecret} />
         </View>
-        <DiceTray notation={notation} roll={roll} disabled={status !== 'open'} height={260} />
+        <DiceTray
+          notation={request?.display ?? notation}
+          label={request?.label}
+          roll={roll}
+          disabled={status !== 'open'}
+          height={260}
+        />
 
         <Divider />
         <Text variant="titleMedium">{iAmMaster ? 'Log da sessão (tudo)' : 'Log da mesa'}</Text>

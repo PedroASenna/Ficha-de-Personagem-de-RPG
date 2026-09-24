@@ -45,6 +45,15 @@ Dois caminhos, porque o problema é lentidão:
 
 **Autosave**: cada passo salva o rascunho (`PATCH /characters/{id}`, incluindo `wizard_step`). Se o app fechar, o card "Rascunho · passo N" na lista reabre exatamente onde parou.
 
+**GURPS e Savage Worlds** têm passos próprios. Cada toque salva na hora (em fila, sem travar a tela) e o servidor devolve a conta pronta, sempre à vista no topo ("7 de 150 pontos livres", "Pontos de Complicação: 2 usados de 3"):
+
+| Sistema | Passos | Detalhes de UX |
+|---|---|---|
+| GURPS | Identidade → Atributos → Vantagens → Desvantagens → Perícias → Revisão | Pontos iniciais em chips (100 a 250). ST/DX/IQ/HT e secundárias com −/+, custo ao lado. Vantagens e desvantagens: busca sem acento na lista do livro, filtro Mental/Física/Social, custo e página. Quando precisa, um diálogo pede nível (e custo por nível), custo (lista "Variável" ou faixa) e autocontrole 6/9/12/15, com a prévia do custo. Perícias: busca, filtro Perícias/Mágicas, −/+ em 1, 2, 4, 8… pontos e o NH calculado ao lado; especialização pedida na hora |
+| Savage Worlds | Identidade → Raça → Complicações → Atributos → Perícias → Vantagens → Revisão | Raça com os traços e a página. Complicações "Menor ou Maior" perguntam qual. Atributos e perícias de d4 a d12, respeitando o dado da raça. Vantagens com os requisitos; o que falta aparece em vermelho, e o que o app não confere aparece como "confira com o Mestre". Com Antecedente Arcano, a lista de Poderes aparece junto |
+
+Na revisão: derivadas (PV, PF, Esquiva, Base de Carga, dano; ou Aparar, Resistência, Carisma, Benes), perícias com o NH/dado e os avisos (desvantagens acima do limite, pontos sobrando, Vantagem acima de Novato).
+
 ## B. Rolagem de dados
 
 - **Montar a rolagem sem digitar**: chips D2…D1000, quantidade, modificador, Vantagem/Desvantagem no d20. Um campo livre aceita notação (`4d6kh3`, `1d8+1d6+2`).
@@ -71,11 +80,17 @@ Dois caminhos, porque o problema é lentidão:
 - **Inventário**: barra de carga (verde → âmbar a 75% → vermelha e "SOBRECARREGADO") calculada pelo sistema (FOR×15 lb na 5ª edição; fixa no Genérico).
 - **Subir de nível** (botão "Nível" no topo da ficha, também no painel do Mestre): mostra "Nível 3 → 4". Na 5ª edição os PV vêm da classe e o diálogo pede os +2 de atributo só nos níveis certos (dá para pular, para quem pega um talento); no Genérico o jogador digita os PV ganhos e soma até 10 pontos. A mesa inteira recebe "Lyra subiu para o nível 4! (+8 PV, FOR +2)" no log.
 
+**Ficha de GURPS e Savage Worlds:**
+- Atributos, derivadas, perícias com NH/dado e a lista de vantagens/Complicações/Poderes com página.
+- GURPS: contador de PF (−/+). Savage: Benes (−/+), Abalado (toque), Fadiga (Descansado → Fatigado −1 → Exausto −2) e três ferimentos + Incapacitado no lugar da barra de PV (botões "Ferimento" e "Curar um").
+- Botão **Evoluir**: ganhar pontos (GURPS) ou XP (Savage), **Fazer Progresso** (Savage: nova Vantagem com requisitos, atributo uma vez por Estágio, uma ou duas perícias, perícia nova) e **Gastar pontos** (GURPS: reabre os passos da criação; só gasta o que tem). No Savage pronto, só os Poderes mudam fora de Progresso.
+
 ## D. Mesa sincronizada
 
 - **Mestre (PC):** Nova mesa → escolhe o **sistema de regras** (fica fixo na campanha) e o nome → recebe o **PIN** (6 caracteres sem 0/O/1/I, para ditar em voz alta) e o **QR code** em "Conectar celulares".
 - **Jogador:** lê o QR code (configura o servidor e entra na mesa depois do login) ou digita o PIN, e escolhe um personagem **do mesmo sistema**. Sem personagem compatível, "Criar um agora" abre o wizard já com o sistema da mesa.
 - **Aba Mesa (celular):** grupo com a mini barra de PV de cada personagem e status online, rolagem compartilhada (com opção "só o Mestre vê") e log da sessão.
+- **Testes da ficha (GURPS e Savage):** chips com atributos, secundárias, Esquiva e perícias ("Espadas Curtas 17", "Lutar d8"). Um toque prepara a bandeja: GURPS rola 3d6 contra o NH; Savage mostra o dado da perícia e o Dado Selvagem. Um −/+ aplica o modificador da situação. O resultado diz "Sucesso por 3", "SUCESSO DECISIVO", "Sucesso + 2 ampliações" ou "Olhos de cobra!", e o log da mesa mostra a mesma coisa.
 - **Tudo ao vivo no painel do Mestre:** rolagens (a última aparece grande, com a cor do resultado), dano e cura no log e nas barras de PV, e quem está conectado.
 - **Campanhas:** nada expira. "Arquivar" guarda a mesa, e "Reabrir campanha" volta com cenas, inimigos e log.
 - **Conexão instável:** aviso "Reconectando…" e reconexão automática, com o estado atual reenviado.
@@ -96,6 +111,7 @@ Layout em três colunas, pensado para monitor de PC:
 - **Toda imagem enviada** (mapa, peça, objeto, inimigo, brasão, mapa-múndi) passa pelo ajuste de ângulo antes de ir para o servidor.
 - **Grupo separado:** "Nova cena", depois botão direito no boneco → "Mover para a cena", ou "Trazer o grupo todo para esta cena". O número na aba mostra quantos personagens estão em cada cena.
 - **Contas:** o admin redefine senhas pelo ícone de contas na lista de mesas (não há e-mail de recuperação).
+- **GURPS e Savage Worlds no painel:** o grupo mostra "150 pontos" ou "Experiente" no lugar do nível. A ficha traz as estatísticas e os testes em chips (clique para rolar: 3d6 contra o NH, ou dado + Dado Selvagem), as vantagens/Complicações com página e os avisos. O botão vira **Pontos** (GURPS) ou **XP** (Savage) para dar experiência ao fim da sessão. Nos inimigos, os atributos rolam pelo sistema (3d6 ≤ valor; d8 que explode) e, no Savage, "Carta Selvagem" liga o Dado Selvagem dos chefes. O rolador livre ganha o campo **NH/Dif.** e, no Savage, o Dado Selvagem.
 
 ## F. Mapa do jogador (celular)
 

@@ -41,6 +41,8 @@ class Character(TimestampMixin, Base):
     attributes: Mapped[dict[str, Any]] = mapped_column(default=dict)
     attribute_method: Mapped[AttributeMethod | None] = mapped_column(str_enum(AttributeMethod))
     attribute_audit: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    # GURPS e Savage Worlds: o que foi comprado (vantagens, perícias, Complicações, Progressos...).
+    build: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
     hp_max: Mapped[int] = mapped_column(default=0)
     hp_current: Mapped[int] = mapped_column(default=0)

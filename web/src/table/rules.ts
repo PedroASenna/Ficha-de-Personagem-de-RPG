@@ -15,6 +15,31 @@ export function checkNotation(score: number, die = "1d20"): string {
   return modifier === 0 ? die : `${die}${formatModifier(modifier)}`;
 }
 
+export type Engine = "classic" | "gurps" | "savage";
+
+/**
+ * Teste de atributo de um inimigo ou personagem, conforme o sistema da mesa:
+ * clássico 1d20+mod; GURPS 3d6 contra o valor; Savage o dado do atributo (explode) e, se for Carta
+ * Selvagem, o Dado Selvagem.
+ */
+export function attributeCheck(
+  engine: Engine | undefined,
+  score: number,
+  die = "1d20",
+  wildCard = false,
+): { notation: string; target?: number; wild?: boolean } {
+  if (engine === "gurps") return { notation: "3d6", target: score };
+  if (engine === "savage") return { notation: `1d${score}!`, ...(wildCard ? { wild: true } : {}) };
+  return { notation: checkNotation(score, die) };
+}
+
+/** Como o atributo aparece: +3 (clássico), 12 (GURPS) ou d8 (Savage). */
+export function attributeDisplay(engine: Engine | undefined, score: number): { main: string; sub: string } {
+  if (engine === "gurps") return { main: String(score), sub: "3d6 ≤" };
+  if (engine === "savage") return { main: `d${score}`, sub: "" };
+  return { main: formatModifier(abilityModifier(score)), sub: String(score) };
+}
+
 export function hpRatio(current: number, max: number): number {
   return max > 0 ? Math.min(1, Math.max(0, current / max)) : 0;
 }

@@ -20,6 +20,72 @@ export type RulesetSummary = {
   attribution: string;
   description: string;
   notes?: string | null;
+  engine?: RulesetEngine;
+};
+
+/** classic: raça/classe/antecedente (5ª edição, genérico); gurps e savage: ficha de pontos/dados. */
+export type RulesetEngine = 'classic' | 'gurps' | 'savage';
+
+export type TraitEffects = {
+  charisma: number;
+  parry: number;
+  toughness: number;
+  pace: number;
+  bennies: number;
+  attribute_points: number;
+  skill_points: number;
+  spell_bonus_per_level: number;
+};
+
+export type TraitKind = 'advantage' | 'disadvantage' | 'perk' | 'quirk' | 'edge' | 'hindrance' | 'power';
+
+/** Custo em pontos (GURPS), como na lista do livro. */
+export type TraitCost = {
+  fixed: number | null;
+  options: number[];
+  min: number | null;
+  max: number | null;
+  per_level: number[];
+  base: number;
+  unit: string | null;
+  variable: boolean;
+  self_control: boolean;
+};
+
+export type TraitRequirements = {
+  rank: number;
+  wild_card: boolean;
+  attributes: Record<string, number>;
+  skills: Record<string, number>;
+  edges: string[];
+  other: string[];
+  text: string;
+};
+
+export type TraitDef = {
+  key: string;
+  name: string;
+  kind: TraitKind;
+  category: string;
+  tags: string[];
+  cost: TraitCost | null;
+  severity: 'minor' | 'major' | 'either' | null;
+  requirements: TraitRequirements | null;
+  effects: TraitEffects;
+  info: Record<string, string>;
+  page: string | null;
+};
+
+export type SkillDef = {
+  key: string;
+  name: string;
+  attribute: string;
+  difficulty: 'F' | 'M' | 'D' | 'MD' | null;
+  default: number | null;
+  specialize: boolean;
+  category: string;
+  group: string;
+  page: string | null;
 };
 
 export type AttributeDef = { key: string; name: string; abbr: string };
@@ -31,6 +97,12 @@ export type Ancestry = {
   bonus_choices: { count: number; amount: number; exclude: string[] } | null;
   speed: number | null;
   traits: string[];
+  /** Savage Worlds: efeitos da raça, Vantagens grátis, características e perícias que ela traz. */
+  effects?: TraitEffects;
+  free_edges?: number;
+  granted_traits?: string[];
+  free_skills?: Record<string, number>;
+  page?: string | null;
 };
 export type CharacterClass = {
   key: string;
@@ -68,10 +140,105 @@ export type RulesetPack = {
   /** Sistemas livres: pontos de atributo digitados para raça/origem personalizadas. */
   custom_bonus: { min: number; max: number } | null;
   custom_required: ('ancestry' | 'background')[];
-  hp: { strategy: 'hit_die_max_plus_mod' | 'fixed' | 'manual' };
+  hp: { strategy: 'hit_die_max_plus_mod' | 'fixed' | 'manual' | 'engine' };
   level_up: { max_level: number; asi_levels: number[]; asi_points: number; attribute_max: number | null; free_points: boolean };
   dice: { default_check: string; direction: 'high' | 'low'; generic_crits: boolean; crit_rules: { sides: number; success: number[]; failure: number[] }[] };
+  engine?: RulesetEngine;
+  skills?: SkillDef[];
+  traits?: TraitDef[];
+  gurps?: { starting_points: number; disadvantage_limit_percent: number; quirk_limit: number } | null;
+  savage?: { attribute_points: number; skill_points: number; ranks: string[]; bennies: number } | null;
 };
+
+/** Teste pronto calculado pelo servidor (GURPS: 3d6 contra o NH; Savage: dado + Dado Selvagem). */
+export type SheetCheck = { key: string; label: string; notation: string; target?: number; wild?: boolean; group: string };
+
+export type SheetDerived = { key: string; label: string; value: number | string; current?: number };
+
+export type SheetTrait = {
+  key: string;
+  name: string;
+  note: string;
+  kind: TraitKind;
+  cost?: number;
+  severity?: 'minor' | 'major';
+  source?: 'creation' | 'advance' | 'race';
+  page: string | null;
+  unmet?: string[];
+  check?: string[];
+  info?: Record<string, string>;
+};
+
+export type GurpsSheet = {
+  engine: 'gurps';
+  points: {
+    total: number;
+    starting: number;
+    earned: number;
+    spent: number;
+    unspent: number;
+    breakdown: { attributes: number; secondary: number; advantages: number; disadvantages: number; quirks: number; skills: number };
+    disadvantages: number;
+    disadvantage_limit: number;
+    quirks: number;
+    quirk_limit: number;
+  };
+  derived: SheetDerived[];
+  traits: SheetTrait[];
+  skills: { key: string; name: string; points: number; level: number; relative: string; difficulty: string; category: string; page: string | null }[];
+  checks: SheetCheck[];
+  warnings: string[];
+};
+
+export type SavageSheet = {
+  engine: 'savage';
+  rank: { index: number; name: string };
+  xp: number;
+  advances: { earned: number; taken: number; available: number };
+  creation: {
+    attributes: { spent: number; budget: number };
+    skills: { spent: number; budget: number };
+    edges: { taken: number; free: number };
+    hindrances: { points: number; spent: number; majors: number; minors: number };
+    funds: number;
+  };
+  derived: SheetDerived[];
+  attributes: { key: string; name: string; die: number; label: string }[];
+  skills: { key: string; name: string; die: number; label: string; attribute: string; category: string; page: string | null }[];
+  traits: SheetTrait[];
+  wounds: { max: number };
+  fatigue: number;
+  shaken: boolean;
+  checks: SheetCheck[];
+  warnings: string[];
+};
+
+export type EngineSheet = GurpsSheet | SavageSheet;
+
+/** O que o jogador comprou (character.build). */
+export type GurpsBuild = {
+  points: number;
+  earned: number;
+  attributes: Record<string, number>;
+  secondary: { hp: number; will: number; per: number; fp: number; speed: number; move: number };
+  traits: { key: string; level: number; per: number | null; base_cost: number | null; self_control: number | null; note: string }[];
+  skills: { key: string; points: number; note: string }[];
+  fp_current: number | null;
+};
+
+export type SavageBuild = {
+  attributes: Record<string, number>;
+  skills: { key: string; die: number; note: string }[];
+  traits: { key: string; severity: 'minor' | 'major' | null; source: 'creation' | 'advance' | 'race'; note: string }[];
+  extra_funds: number;
+  xp: number;
+  advances: Record<string, unknown>[];
+  bennies: number | null;
+  fatigue: number;
+  shaken: boolean;
+};
+
+export type AdvanceChoice = { type: 'edge' | 'attribute' | 'skill' | 'skills' | 'new_skill'; key?: string; keys?: string[]; note?: string };
 
 export type AttributeMethod = 'standard_array' | 'point_buy' | 'roll' | 'class_preset' | 'manual';
 
@@ -105,6 +272,8 @@ export type Character = {
   background_name: string | null;
   background_bonus: Record<string, number>;
   level: number;
+  /** "Nível 3", "150 pontos" (GURPS) ou "Experiente" (Savage Worlds). */
+  level_label?: string;
   attributes: Record<string, number>;
   modifiers: Record<string, number>;
   attribute_method: AttributeMethod | null;
@@ -126,18 +295,39 @@ export type Character = {
   items: Item[];
   abilities: Ability[];
   load: { total_weight: number; capacity: number; unit: string; encumbered: boolean; ratio: number };
+  build?: Record<string, unknown>;
+  sheet?: EngineSheet | null;
 };
 
 export type RollPayload = {
   notation: string;
-  terms: { notation: string; sign: number; dice: { sides: number; value: number; kept: boolean }[]; subtotal: number }[];
+  terms: {
+    notation: string;
+    sign: number;
+    /** Dado Selvagem do Savage Worlds. */
+    wild?: boolean;
+    /** rolls: cada lançamento de um dado que explodiu (a soma é o value). */
+    dice: { sides: number; value: number; kept: boolean; rolls?: number[] }[];
+    subtotal: number;
+  }[];
   modifier: number;
   total: number;
 };
 
+/** Resultado de um teste (GURPS, Savage Worlds ou CD). */
+export type CheckPayload = {
+  kind: 'gurps' | 'savage' | 'classic';
+  target: number;
+  success: boolean;
+  critical: boolean;
+  margin?: number;
+  raises?: number;
+  wild?: boolean;
+};
+
 export type OutcomePayload = { tier: Tier; natural: number | null; intensity: number; effect: EffectPreset };
 
-export type RollResponse = { roll: RollPayload; outcome: OutcomePayload };
+export type RollResponse = { roll: RollPayload; outcome: OutcomePayload; check?: CheckPayload | null };
 
 export type RoomMember = {
   user_id: UUID;
@@ -284,6 +474,7 @@ export type PartyMember = {
   class_name: string | null;
   ancestry_name: string | null;
   level: number;
+  level_label?: string | null;
   portrait_url: string | null;
   hp_current: number;
   hp_max: number;
@@ -324,6 +515,7 @@ export type RollResultMsg = Base & {
   label: string | null;
   roll: RollPayload;
   outcome: OutcomePayload;
+  check?: CheckPayload | null;
   actor: { user_id: UUID; display_name: string };
   character: { id: UUID; name: string } | null;
   summary: string;
@@ -376,6 +568,7 @@ export type ServerMessage =
       event_id: number;
       character: { id: UUID; name: string };
       level: number;
+      level_label?: string | null;
       hp_gain: number;
       hp_current: number;
       hp_max: number;

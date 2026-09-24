@@ -1,5 +1,7 @@
 /**
  * Wizard de criação: Sistema → Identidade (nome/foto) → Raça → Classe → Atributos → Antecedente → Revisão.
+ * GURPS: Identidade → Atributos → Vantagens → Desvantagens → Perícias (tudo com pontos de personagem).
+ * Savage Worlds: Identidade → Raça → Complicações → Atributos → Perícias → Vantagens.
  * Cada "Próximo" salva o rascunho no servidor; fechar o app no meio não perde nada.
  */
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, HelperText, Portal, RadioButton, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 
+import { EngineReview, EngineSteps, GURPS_STEPS, SAVAGE_STEPS, type EngineStepId } from '../../components/build/EngineSteps';
 import { RotateImageDialog } from '../../components/common/RotateImageDialog';
 import { Screen } from '../../components/common/Screen';
 import { AttributeStep } from '../../components/wizard/AttributeStep';
@@ -20,7 +23,8 @@ import { pickPortrait, PortraitSource, uploadPortrait } from '../../lib/portrait
 import { keys, useRulesetPack, useRulesets } from '../../lib/queries';
 import type { AttributeMethod, Character } from '../../lib/types';
 
-type StepId = 'system' | 'identity' | 'ancestry' | 'class' | 'attributes' | 'background' | 'review';
+type StepId = 'system' | 'identity' | 'ancestry' | 'class' | 'attributes' | 'background' | 'review' | EngineStepId;
+const ENGINE_STEPS = new Set<string>([...GURPS_STEPS, ...SAVAGE_STEPS].map((s) => s.id));
 
 export default function NewCharacterScreen() {
   const theme = useTheme();
@@ -39,6 +43,7 @@ export default function NewCharacterScreen() {
   // Qual passo está com o cartão "Personalizado" aberto (raça/origem digitadas).
   const [customOpen, setCustomOpen] = useState<'ancestry' | 'background' | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [savingBuild, setSavingBuild] = useState(false);
 
   const { data: pack } = useRulesetPack(rulesetId);
 
@@ -46,6 +51,10 @@ export default function NewCharacterScreen() {
     const list: { id: StepId; label: string }[] = [];
     if (!params.rulesetId && !params.draftId) list.push({ id: 'system', label: 'Sistema' });
     list.push({ id: 'identity', label: 'Identidade' });
+    if (pack?.engine === 'gurps') return [...list, ...GURPS_STEPS, { id: 'review', label: 'Revisão' }];
+    if (pack?.engine === 'savage') {
+      return [...list, { id: 'ancestry', label: pack.ancestry_label }, ...SAVAGE_STEPS, { id: 'review', label: 'Revisão' }];
+    }
     if (pack?.ancestries.length || pack?.allow_custom) list.push({ id: 'ancestry', label: pack?.ancestry_label ?? 'Raça' });
     list.push({ id: 'class', label: 'Classe' });
     list.push({ id: 'attributes', label: 'Atributos' });
@@ -147,7 +156,8 @@ export default function NewCharacterScreen() {
     (step.id === 'ancestry' && !!draft?.ancestry_key) ||
     (step.id === 'class' && !!draft?.class_key) ||
     (step.id === 'attributes' && Object.keys(draft?.attributes ?? {}).length > 0) ||
-    (step.id === 'background' && (!pack?.custom_required.includes('background') || !!draft?.background_key));
+    (step.id === 'background' && (!pack?.custom_required.includes('background') || !!draft?.background_key)) ||
+    (ENGINE_STEPS.has(step.id) && !!draft && !savingBuild);
 
   return (
     <Screen>
@@ -190,10 +200,13 @@ export default function NewCharacterScreen() {
                 key: a.key,
                 name: a.name,
                 description: a.description,
-                tags: [
-                  ...Object.entries(a.bonuses).map(([k, v]) => `${pack.attributes.find((x) => x.key === k)?.abbr} +${v}`),
-                  ...(a.speed ? [`${a.speed} pés`] : []),
-                ],
+                tags:
+                  pack.engine === 'savage'
+                    ? [...a.traits, ...(a.page ? [`pág. ${a.page}`] : [])]
+                    : [
+                        ...Object.entries(a.bonuses).map(([k, v]) => `${pack.attributes.find((x) => x.key === k)?.abbr} +${v}`),
+                        ...(a.speed ? [`${a.speed} pés`] : []),
+                      ],
               }))}
               selected={customOpen === 'ancestry' ? 'custom' : (draft?.ancestry_key ?? null)}
               onSelect={(key) => (key === 'custom' ? setCustomOpen('ancestry') : (setCustomOpen(null), void patch({ ancestry_key: key })))}
@@ -262,6 +275,10 @@ export default function NewCharacterScreen() {
 
       {step.id === 'attributes' && pack && draft ? <AttributeStep pack={pack} character={draft} busy={busy} onGenerate={generate} /> : null}
 
+      {ENGINE_STEPS.has(step.id) && pack && draft ? (
+        <EngineSteps key={draft.id} pack={pack} character={draft} step={step.id as EngineStepId} onSaved={setDraft} onSaving={setSavingBuild} />
+      ) : null}
+
       {step.id === 'background' && pack ? (
         <>
           {pack.backgrounds.length > 0 ? (
@@ -327,7 +344,16 @@ export default function NewCharacterScreen() {
         </>
       ) : null}
 
-      {step.id === 'review' && draft ? (
+      {step.id === 'review' && draft && draft.sheet ? (
+        <View style={{ gap: 8 }}>
+          <Text variant="headlineSmall">{draft.name}</Text>
+          <Text>{[draft.ancestry_name, draft.level_label].filter(Boolean).join(' · ')}</Text>
+          <EngineReview character={draft} />
+          {draft.missing.length > 0 ? <HelperText type="error">Falta: {draft.missing.map(missingLabel).join(', ')}</HelperText> : null}
+        </View>
+      ) : null}
+
+      {step.id === 'review' && draft && !draft.sheet ? (
         <View style={{ gap: 8 }}>
           <Text variant="headlineSmall">{draft.name}</Text>
           <Text>{[draft.ancestry_name, draft.class_name, draft.background_name].filter(Boolean).join(' · ')}</Text>
@@ -351,7 +377,7 @@ export default function NewCharacterScreen() {
       <View style={styles.nav}>
         <Button onPress={() => (stepIndex === 0 ? router.back() : setStepIndex((i) => i - 1))}>Voltar</Button>
         {step.id === 'review' ? (
-          <Button mode="contained" icon="check-decagram" onPress={finalize} loading={busy} disabled={busy || (draft?.missing.length ?? 1) > 0}>
+          <Button mode="contained" icon="check-decagram" onPress={finalize} loading={busy} disabled={busy || savingBuild || (draft?.missing.length ?? 1) > 0}>
             Concluir personagem
           </Button>
         ) : (
@@ -378,6 +404,19 @@ export default function NewCharacterScreen() {
       </Portal>
     </Screen>
   );
+}
+
+const MISSING_LABEL: Record<string, string> = {
+  name: 'nome',
+  ancestry: 'raça',
+  points: 'pontos gastos a mais',
+  disadvantages: 'desvantagens acima do limite',
+  quirks: 'peculiaridades demais',
+  edges: 'Vantagem acima de Novato',
+};
+
+function missingLabel(key: string): string {
+  return MISSING_LABEL[key] ?? key;
 }
 
 const styles = StyleSheet.create({

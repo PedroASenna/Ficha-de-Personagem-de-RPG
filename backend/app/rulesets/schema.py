@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from app.models.enums import RulesetStatus
 
@@ -45,16 +45,38 @@ class BonusChoice(_Strict):
     exclude: list[str] = []
 
 
+class TraitEffects(_Strict):
+    """Efeitos mecânicos que o app aplica sozinho nas estatísticas derivadas (Savage Worlds e GURPS)."""
+
+    charisma: int = 0
+    parry: int = 0
+    toughness: int = 0
+    pace: int = 0
+    bennies: int = 0
+    attribute_points: int = 0
+    skill_points: int = 0
+    # GURPS: Aptidão Mágica soma o nível às mágicas.
+    spell_bonus_per_level: int = 0
+
+
 class Ancestry(_Strict):
     key: str
     name: str
     source_name: str | None = None
     description: str = ""
+    # Savage Worlds: tipos de dado a mais no atributo inicial (Anões: {"vig": 1} = Vigor d6).
     bonuses: dict[str, int] = {}
     bonus_choices: BonusChoice | None = None
     speed: int | None = None
     hp_bonus_per_level: int = 0
     traits: list[str] = []
+    effects: TraitEffects = TraitEffects()
+    free_edges: int = 0
+    # Características que a raça já traz (ex.: Complicação Desastrado dos elfos).
+    granted_traits: list[str] = []
+    # Perícias que começam num dado de graça (Atlante: {"nadar": 6}).
+    free_skills: dict[str, int] = {}
+    page: str | None = None
 
 
 class CharacterClass(_Strict):
@@ -102,14 +124,16 @@ class LevelUpRule(_Strict):
 
 
 class HpRule(_Strict):
-    strategy: Literal["hit_die_max_plus_mod", "fixed", "manual"]
+    # engine: o motor do sistema calcula (GURPS: PV = ST + comprados; Savage: 3 ferimentos).
+    strategy: Literal["hit_die_max_plus_mod", "fixed", "manual", "engine"]
     attribute: str | None = None
     value: int | None = None
     minimum: int = 1
 
 
 class CarryRule(_Strict):
-    strategy: Literal["attribute_multiplier", "fixed"]
+    # basic_lift: Base de Carga do GURPS (ST² / 10 kg).
+    strategy: Literal["attribute_multiplier", "fixed", "basic_lift"]
     attribute: str | None = None
     multiplier: float | None = None
     value: float | None = None
@@ -129,6 +153,92 @@ class DiceRules(_Strict):
     crit_rules: list[CritRuleModel] = []
 
 
+class TraitCost(_Strict):
+    """Custo em pontos de uma vantagem/desvantagem do GURPS, como aparece na lista do livro."""
+
+    fixed: int | None = None
+    options: list[int] = []
+    min: int | None = None
+    max: int | None = None
+    # Por nível (ou por unidade: "apetrecho", "vida"...), às vezes com mais de uma opção e um valor base.
+    per_level: list[int] = []
+    base: int = 0
+    unit: str | None = None
+    variable: bool = False
+    # Desvantagem com número de autocontrole (o custo muda com 6, 9, 12 ou 15).
+    self_control: bool = False
+
+
+class TraitRequirements(_Strict):
+    """Requisitos das Vantagens e Poderes do Savage Worlds (0 = Novato ... 4 = Lendário)."""
+
+    rank: int = Field(default=0, ge=0, le=4)
+    wild_card: bool = False
+    attributes: dict[str, int] = {}
+    skills: dict[str, int] = {}
+    edges: list[str] = []
+    # O que o app não confere sozinho (ex.: "Atirar ou Lutar d10+"): aparece para o Mestre decidir.
+    other: list[str] = []
+    text: str = ""
+
+
+class TraitDef(_Strict):
+    key: str
+    name: str
+    kind: Literal["advantage", "disadvantage", "perk", "quirk", "edge", "hindrance", "power"]
+    category: str = ""
+    tags: list[str] = []
+    cost: TraitCost | None = None
+    severity: Literal["minor", "major", "either"] | None = None
+    requirements: TraitRequirements | None = None
+    effects: TraitEffects = TraitEffects()
+    # Poderes: Pontos de Poder, Distância, Duração.
+    info: dict[str, str] = {}
+    page: str | None = None
+
+
+class SkillDef(_Strict):
+    key: str
+    name: str
+    # Atributo dominante; no GURPS também "will" (Vontade) e "per" (Percepção).
+    attribute: str
+    difficulty: Literal["F", "M", "D", "MD"] | None = None
+    # GURPS: valor pré-definido a partir do atributo (ex.: -5 = DX-5). None = não dá para usar sem treino.
+    default: int | None = None
+    specialize: bool = False
+    category: str = ""
+    group: str = ""
+    page: str | None = None
+
+
+class GurpsRules(_Strict):
+    starting_points: int = 150
+    # Limite de desvantagens: porcentagem dos pontos iniciais (padrão do livro: 50%).
+    disadvantage_limit_percent: int = 50
+    quirk_limit: int = 5
+    # Tabela de dano: [ST, GdP, GeB].
+    damage: list[tuple[int, str, str]] = []
+
+
+class SavageRules(_Strict):
+    attribute_points: int = 5
+    skill_points: int = 15
+    hindrance_points_max: int = 4
+    major_hindrances_max: int = 1
+    minor_hindrances_max: int = 2
+    base_pace: int = 6
+    bennies: int = 3
+    starting_funds: int = 500
+    xp_per_advance: int = 5
+    legendary_xp: int = 80
+    legendary_xp_per_advance: int = 10
+    ranks: list[str] = ["Novato", "Experiente", "Veterano", "Heroico", "Lendário"]
+
+
+GURPS_ATTRIBUTES = {"st", "dx", "iq", "ht"}
+SAVAGE_ATTRIBUTES = {"agi", "ast", "esp", "for", "vig"}
+
+
 class RulesetPack(_Strict):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9.-]{1,63}$")
     name: str
@@ -136,7 +246,8 @@ class RulesetPack(_Strict):
     version: str
     status: RulesetStatus = RulesetStatus.AVAILABLE
     language: str = "pt-BR"
-    license: str
+    # Cabe na coluna rulesets.license (40).
+    license: str = Field(max_length=40)
     license_url: str | None = None
     attribution: str = ""
     source_url: str | None = None
@@ -161,10 +272,19 @@ class RulesetPack(_Strict):
     carry: CarryRule
     dice: DiceRules = DiceRules()
     level_up: LevelUpRule = LevelUpRule()
+    # classic: raça/classe/antecedente + atributos (5ª edição, genérico). gurps e savage: motores próprios.
+    engine: Literal["classic", "gurps", "savage"] = "classic"
+    skills: list[SkillDef] = []
+    traits: list[TraitDef] = []
+    gurps: GurpsRules | None = None
+    savage: SavageRules | None = None
+    _trait_index: dict[str, TraitDef] = PrivateAttr(default_factory=dict)
+    _skill_index: dict[str, SkillDef] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="after")
     def _check_references(self) -> "RulesetPack":
         keys = {a.key for a in self.attributes}
+        self._check_engine(keys)
         for anc in self.ancestries:
             unknown = set(anc.bonuses) - keys
             if unknown:
@@ -186,6 +306,52 @@ class RulesetPack(_Strict):
         if std is not None and len(std) != len(self.attributes):
             raise ValueError("standard_array precisa ter um valor por atributo")
         return self
+
+    def _check_engine(self, keys: set[str]) -> None:
+        if self.engine == "gurps":
+            if keys != GURPS_ATTRIBUTES or self.gurps is None:
+                raise ValueError("GURPS precisa dos atributos st, dx, iq, ht e do bloco gurps")
+        if self.engine == "savage":
+            if keys != SAVAGE_ATTRIBUTES or self.savage is None:
+                raise ValueError("Savage Worlds precisa dos atributos agi, ast, esp, for, vig e do bloco savage")
+        if self.engine != "classic" and self.hp.strategy != "engine":
+            raise ValueError("Sistemas com motor próprio usam hp.strategy = engine")
+        trait_keys = [t.key for t in self.traits]
+        skill_keys = [s.key for s in self.skills]
+        for label, items in (("característica", trait_keys), ("perícia", skill_keys)):
+            dupes = {k for k in items if items.count(k) > 1}
+            if dupes:
+                raise ValueError(f"{label} repetida: {dupes}")
+        skill_attrs = keys | ({"will", "per"} if self.engine == "gurps" else set())
+        for skill in self.skills:
+            if skill.attribute not in skill_attrs:
+                raise ValueError(f"{skill.key}: atributo desconhecido {skill.attribute}")
+        known_traits, known_skills = set(trait_keys), set(skill_keys)
+        for trait in self.traits:
+            if (
+                self.engine == "gurps"
+                and trait.kind in ("advantage", "disadvantage", "perk", "quirk")
+                and trait.cost is None
+            ):
+                raise ValueError(f"{trait.key}: sem custo")
+            req = trait.requirements
+            if req is None:
+                continue
+            if set(req.attributes) - keys or set(req.skills) - known_skills or set(req.edges) - known_traits:
+                raise ValueError(f"{trait.key}: requisito aponta para algo que não existe")
+        for anc in self.ancestries:
+            if set(anc.granted_traits) - known_traits or set(anc.free_skills) - known_skills:
+                raise ValueError(f"{anc.key}: característica ou perícia desconhecida")
+
+    def model_post_init(self, context: object, /) -> None:
+        self._trait_index = {t.key: t for t in self.traits}
+        self._skill_index = {s.key: s for s in self.skills}
+
+    def trait(self, key: str) -> TraitDef | None:
+        return self._trait_index.get(key)
+
+    def skill(self, key: str) -> SkillDef | None:
+        return self._skill_index.get(key)
 
     def attribute_keys(self) -> list[str]:
         return [a.key for a in self.attributes]

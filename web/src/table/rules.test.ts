@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { abilityModifier, checkNotation, formatModifier, hpColor, hpRatio } from "./rules";
+import {
+  abilityModifier,
+  attributeCheck,
+  attributeDisplay,
+  checkNotation,
+  formatModifier,
+  hpColor,
+  hpRatio,
+} from "./rules";
 
 describe("regras", () => {
   it("calcula modificadores estilo d20", () => {
@@ -25,5 +33,24 @@ describe("regras", () => {
     expect(hpColor(0.4)).toBe("#e3a13b");
     expect(hpColor(0.1)).toBe("#e0584a");
     expect(hpColor(0)).toBe("#6b6159");
+  });
+});
+
+describe("testes por sistema", () => {
+  it("clássico: 1d20 + modificador", () => {
+    expect(attributeCheck("classic", 14)).toEqual({ notation: "1d20+2" });
+    expect(attributeCheck(undefined, 8)).toEqual({ notation: "1d20-1" });
+    expect(attributeDisplay("classic", 14)).toEqual({ main: "+2", sub: "14" });
+  });
+
+  it("GURPS: 3d6 contra o próprio valor", () => {
+    expect(attributeCheck("gurps", 12)).toEqual({ notation: "3d6", target: 12 });
+    expect(attributeDisplay("gurps", 12)).toEqual({ main: "12", sub: "3d6 ≤" });
+  });
+
+  it("Savage: o dado explode; Carta Selvagem rola também o Dado Selvagem", () => {
+    expect(attributeCheck("savage", 8)).toEqual({ notation: "1d8!" });
+    expect(attributeCheck("savage", 8, "1d20", true)).toEqual({ notation: "1d8!", wild: true });
+    expect(attributeDisplay("savage", 10)).toEqual({ main: "d10", sub: "" });
   });
 });

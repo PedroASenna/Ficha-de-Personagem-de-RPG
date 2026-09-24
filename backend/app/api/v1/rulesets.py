@@ -20,6 +20,7 @@ async def list_rulesets(state: AppState = Depends(get_state)):
             license_url=p.license_url,
             attribution=p.attribution,
             description=p.description,
+            engine=p.engine,
         )
         for p in state.registry.packs.values()
     ]

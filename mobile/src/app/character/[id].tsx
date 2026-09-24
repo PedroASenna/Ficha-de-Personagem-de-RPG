@@ -3,7 +3,7 @@
  * habilidades com recarga visual (botão cinza até o descanso certo) e carga do inventário.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
@@ -15,6 +15,7 @@ import {
   HelperText,
   IconButton,
   List,
+  Menu,
   Portal,
   ProgressBar,
   SegmentedButtons,
@@ -26,12 +27,14 @@ import {
 
 import { Screen } from '../../components/common/Screen';
 import { HPBar } from '../../components/hud/HPBar';
+import { EngineSheet, WoundTrack } from '../../components/sheet/EngineSheet';
 import { LevelUpDialog } from '../../components/sheet/LevelUpDialog';
+import { AdvanceDialog, ExperienceDialog } from '../../components/sheet/ProgressDialogs';
 import { api, ApiError } from '../../lib/api';
 import { absoluteUrl } from '../../lib/config';
 import { playHaptic, playHpFeedback } from '../../lib/feedback';
 import { keys, useCharacter, useRulesetPack } from '../../lib/queries';
-import type { Character } from '../../lib/types';
+import type { AdvanceChoice, Character } from '../../lib/types';
 import { hud } from '../../theme/theme';
 
 const QUICK = [1, 5, 10];
@@ -55,6 +58,9 @@ export default function CharacterSheetScreen() {
   const [abilityRecharge, setAbilityRecharge] = useState<'short_rest' | 'long_rest'>('long_rest');
   const [levelDialog, setLevelDialog] = useState(false);
   const [leveling, setLeveling] = useState(false);
+  const [evolveMenu, setEvolveMenu] = useState(false);
+  const [xpDialog, setXpDialog] = useState(false);
+  const [advanceDialog, setAdvanceDialog] = useState(false);
 
   const setCached = (c: Character) => queryClient.setQueryData(keys.character(id), c);
 
@@ -86,6 +92,28 @@ export default function CharacterSheetScreen() {
   }
 
   const typed = Number(amount) || 0;
+  const engine = character.sheet ? character.sheet.engine : null;
+  const patchBuild = (patch: Record<string, unknown>) => act(() => api.patchCharacter(character.id, { build: patch }));
+  const gainExperience = async (value: number) => {
+    setLeveling(true);
+    await act(async () => {
+      const updated = await api.levelUp(character.id, { experience: value, expected_version: character.version });
+      playHaptic('success_heavy');
+      setXpDialog(false);
+      return updated;
+    });
+    setLeveling(false);
+  };
+  const advance = async (choice: AdvanceChoice) => {
+    setLeveling(true);
+    await act(async () => {
+      const updated = await api.advance(character.id, { ...choice, expected_version: character.version });
+      playHaptic('success_heavy');
+      setAdvanceDialog(false);
+      return updated;
+    });
+    setLeveling(false);
+  };
   const loadColor = character.load.encumbered ? hud.critical : character.load.ratio > 0.75 ? hud.wounded : hud.healthy;
 
   return (
@@ -103,63 +131,105 @@ export default function CharacterSheetScreen() {
               {character.name}
             </Text>
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              {[character.ancestry_name, character.class_name, `nível ${character.level}`].filter(Boolean).join(' · ')}
+              {[character.ancestry_name, character.class_name, character.level_label ?? `nível ${character.level}`].filter(Boolean).join(' · ')}
             </Text>
             {character.background_name ? <Text style={{ color: theme.colors.onSurfaceVariant }}>{character.background_name}</Text> : null}
           </View>
-          {character.status === 'complete' && pack ? (
+          {character.status === 'complete' && pack && !engine ? (
             <Button mode="contained-tonal" icon="arrow-up-bold-circle" compact onPress={() => setLevelDialog(true)} accessibilityLabel="Subir de nível">
               Nível
             </Button>
+          ) : null}
+          {character.status === 'complete' && pack && engine ? (
+            <Menu
+              visible={evolveMenu}
+              onDismiss={() => setEvolveMenu(false)}
+              anchor={
+                <Button mode="contained-tonal" icon="arrow-up-bold-circle" compact onPress={() => setEvolveMenu(true)} accessibilityLabel="Evoluir o personagem">
+                  Evoluir
+                </Button>
+              }
+            >
+              <Menu.Item leadingIcon="star-plus" title={engine === 'gurps' ? 'Ganhar pontos' : 'Ganhar XP'} onPress={() => (setEvolveMenu(false), setXpDialog(true))} />
+              {engine === 'savage' ? (
+                <Menu.Item leadingIcon="stairs-up" title="Fazer Progresso" onPress={() => (setEvolveMenu(false), setAdvanceDialog(true))} />
+              ) : null}
+              <Menu.Item
+                leadingIcon="pencil"
+                title={engine === 'gurps' ? 'Gastar pontos (editar ficha)' : 'Poderes'}
+                onPress={() => (setEvolveMenu(false), router.push({ pathname: '/character/edit', params: { id: character.id } }))}
+              />
+            </Menu>
           ) : null}
         </View>
 
         {/* ---- HP ---- */}
         <Surface style={styles.panel} elevation={1}>
-          <HPBar current={character.hp_current} max={character.hp_max} temp={character.hp_temp} height={30} onTransition={playHpFeedback} />
-          <View style={styles.hpRow}>
-            {QUICK.map((n) => (
-              <Button key={`d${n}`} mode="contained-tonal" compact buttonColor="#5C1B17" textColor="#FFDAD5" onPress={() => changeHp('damage', n)} accessibilityLabel={`Sofrer ${n} de dano`}>
-                −{n}
+          {engine === 'savage' ? (
+            <WoundTrack character={character} />
+          ) : (
+            <HPBar current={character.hp_current} max={character.hp_max} temp={character.hp_temp} height={30} onTransition={playHpFeedback} />
+          )}
+          {engine === 'savage' ? (
+            <View style={styles.hpRow}>
+              <Button mode="contained-tonal" icon="water" buttonColor="#5C1B17" textColor="#FFDAD5" onPress={() => changeHp('damage', 1)}>
+                Ferimento
               </Button>
-            ))}
-            {QUICK.map((n) => (
-              <Button key={`h${n}`} mode="contained-tonal" compact buttonColor="#113B2A" textColor="#B7F5CF" onPress={() => changeHp('heal', n)} accessibilityLabel={`Curar ${n}`}>
-                +{n}
+              <Button mode="contained-tonal" icon="bandage" buttonColor="#113B2A" textColor="#B7F5CF" onPress={() => changeHp('heal', 1)}>
+                Curar um
               </Button>
-            ))}
-          </View>
-          <View style={styles.hpRow}>
-            <TextInput
-              mode="outlined"
-              dense
-              label="Valor"
-              value={amount}
-              onChangeText={(t) => setAmount(t.replace(/\D/g, '').slice(0, 4))}
-              keyboardType="number-pad"
-              style={{ flex: 1 }}
-            />
-            <IconButton icon="sword" mode="contained" onPress={() => changeHp('damage', typed)} disabled={!typed} accessibilityLabel="Aplicar dano" />
-            <IconButton icon="heart-plus" mode="contained" onPress={() => changeHp('heal', typed)} disabled={!typed} accessibilityLabel="Aplicar cura" />
-            <IconButton icon="shield" mode="contained" onPress={() => changeHp('temp', typed)} disabled={!typed} accessibilityLabel="PV temporários" />
-          </View>
+            </View>
+          ) : (
+            <>
+            <View style={styles.hpRow}>
+              {QUICK.map((n) => (
+                <Button key={`d${n}`} mode="contained-tonal" compact buttonColor="#5C1B17" textColor="#FFDAD5" onPress={() => changeHp('damage', n)} accessibilityLabel={`Sofrer ${n} de dano`}>
+                  −{n}
+                </Button>
+              ))}
+              {QUICK.map((n) => (
+                <Button key={`h${n}`} mode="contained-tonal" compact buttonColor="#113B2A" textColor="#B7F5CF" onPress={() => changeHp('heal', n)} accessibilityLabel={`Curar ${n}`}>
+                  +{n}
+                </Button>
+              ))}
+            </View>
+            <View style={styles.hpRow}>
+              <TextInput
+                mode="outlined"
+                dense
+                label="Valor"
+                value={amount}
+                onChangeText={(t) => setAmount(t.replace(/\D/g, '').slice(0, 4))}
+                keyboardType="number-pad"
+                style={{ flex: 1 }}
+              />
+              <IconButton icon="sword" mode="contained" onPress={() => changeHp('damage', typed)} disabled={!typed} accessibilityLabel="Aplicar dano" />
+              <IconButton icon="heart-plus" mode="contained" onPress={() => changeHp('heal', typed)} disabled={!typed} accessibilityLabel="Aplicar cura" />
+              <IconButton icon="shield" mode="contained" onPress={() => changeHp('temp', typed)} disabled={!typed} accessibilityLabel="PV temporários" />
+            </View>
+            </>
+          )}
         </Surface>
 
-        {/* ---- Atributos ---- */}
-        <View style={styles.attrs}>
-          {pack?.attributes.map((a) => (
-            <Surface key={a.key} style={styles.attr} elevation={1}>
-              <Text variant="labelMedium">{a.abbr}</Text>
-              <Text variant="titleLarge" style={{ fontWeight: '800' }}>
-                {character.attributes[a.key]}
-              </Text>
-              <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
-                {(character.modifiers[a.key] ?? 0) >= 0 ? '+' : ''}
-                {character.modifiers[a.key]}
-              </Text>
-            </Surface>
-          ))}
-        </View>
+        {engine ? <EngineSheet character={character} onPatchBuild={(patch) => void patchBuild(patch)} /> : null}
+
+        {/* ---- Atributos (sistemas clássicos; GURPS e Savage mostram na ficha do motor) ---- */}
+        {!engine ? (
+          <View style={styles.attrs}>
+            {pack?.attributes.map((a) => (
+              <Surface key={a.key} style={styles.attr} elevation={1}>
+                <Text variant="labelMedium">{a.abbr}</Text>
+                <Text variant="titleLarge" style={{ fontWeight: '800' }}>
+                  {character.attributes[a.key]}
+                </Text>
+                <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
+                  {(character.modifiers[a.key] ?? 0) >= 0 ? '+' : ''}
+                  {character.modifiers[a.key]}
+                </Text>
+              </Surface>
+            ))}
+          </View>
+        ) : null}
 
         {/* ---- Magias ---- */}
         {Object.keys(character.spell_slots).length > 0 ? (
@@ -247,7 +317,23 @@ export default function CharacterSheetScreen() {
         {error ? <HelperText type="error">{error}</HelperText> : null}
       </Screen>
 
-      {pack ? (
+      {pack && engine ? (
+        <Portal>
+          <ExperienceDialog
+            key={`xp-${xpDialog}`}
+            visible={xpDialog}
+            character={character}
+            pack={pack}
+            busy={leveling}
+            onDismiss={() => setXpDialog(false)}
+            onConfirm={(value) => void gainExperience(value)}
+          />
+          {engine === 'savage' && advanceDialog ? (
+            <AdvanceDialog visible character={character} pack={pack} busy={leveling} onDismiss={() => setAdvanceDialog(false)} onConfirm={(c) => void advance(c)} />
+          ) : null}
+        </Portal>
+      ) : null}
+      {pack && !engine ? (
         <LevelUpDialog
           key={`${character.level}-${levelDialog}`}
           visible={levelDialog}

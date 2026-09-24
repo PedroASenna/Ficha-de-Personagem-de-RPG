@@ -44,6 +44,8 @@ class CharacterPatch(BaseModel):
     hp_max: int | None = Field(default=None, ge=1, le=9999)
     conditions: list[str] | None = Field(default=None, max_length=20)
     notes: str | None = Field(default=None, max_length=5000)
+    # GURPS / Savage Worlds: partes da ficha que mudaram (atributos, vantagens, perícias...).
+    build: dict[str, Any] | None = None
 
 
 class AttributeGenerateIn(BaseModel):
@@ -56,6 +58,18 @@ class LevelUpIn(BaseModel):
     attributes: dict[str, int] = Field(default_factory=dict, max_length=12)
     # PV ganhos, nos sistemas em que não são calculados pela classe.
     hp_gain: int | None = Field(default=None, ge=0, le=999)
+    # GURPS: pontos de personagem; Savage Worlds: XP. Nesses sistemas substitui a subida de nível.
+    experience: int | None = Field(default=None, ge=1, le=1000)
+    expected_version: int | None = None
+
+
+class AdvanceIn(BaseModel):
+    """Progresso do Savage Worlds (cada 5 XP)."""
+
+    type: Literal["edge", "attribute", "skill", "skills", "new_skill"]
+    key: str | None = Field(default=None, max_length=64)
+    keys: list[str] = Field(default_factory=list, max_length=2)
+    note: str = Field(default="", max_length=80)
     expected_version: int | None = None
 
 
@@ -147,6 +161,8 @@ class CharacterOut(BaseModel):
     background_name: str | None
     background_bonus: dict[str, int]
     level: int
+    # "Nível 3", "150 pontos" (GURPS) ou "Experiente" (Savage Worlds).
+    level_label: str
     attributes: dict[str, int]
     modifiers: dict[str, int]
     attribute_method: AttributeMethod | None
@@ -161,6 +177,9 @@ class CharacterOut(BaseModel):
     items: list[ItemOut]
     abilities: list[AbilityOut]
     load: LoadOut
+    build: dict[str, Any]
+    # Ficha calculada pelo motor (pontos, derivadas, perícias, testes prontos, avisos). None nos clássicos.
+    sheet: dict[str, Any] | None
     updated_at: datetime
 
 

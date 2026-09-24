@@ -51,6 +51,9 @@ class RollRequestMsg(BaseModel):
     npc_id: uuid.UUID | None = None
     label: str | None = Field(default=None, max_length=60)
     visibility: Literal["public", "master_only"] = "public"
+    # Teste: NH do GURPS, dificuldade do Savage Worlds (padrão 4) ou CD. wild = Dado Selvagem (Savage).
+    target: int | None = Field(default=None, ge=-50, le=200)
+    wild: bool = False
 
 
 class HpChangeMsg(BaseModel):

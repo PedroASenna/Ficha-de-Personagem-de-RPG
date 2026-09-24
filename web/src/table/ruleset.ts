@@ -21,9 +21,13 @@ export interface RulesetPack {
   name: string;
   attributes: RulesetAttribute[];
   dice: { default_check: string };
-  hp: { strategy: "hit_die_max_plus_mod" | "fixed" | "manual" };
+  hp: { strategy: "hit_die_max_plus_mod" | "fixed" | "manual" | "engine" };
   level_up: LevelUpRule;
+  /** classic (5ª edição, genérico), gurps ou savage. */
+  engine?: RulesetEngine;
 }
+
+export type RulesetEngine = "classic" | "gurps" | "savage";
 
 /** O que o próximo nível dá: PV automáticos (pela classe) ou digitados, e pontos de atributo. */
 export function nextLevelRules(pack: Pick<RulesetPack, "hp" | "level_up">, level: number) {

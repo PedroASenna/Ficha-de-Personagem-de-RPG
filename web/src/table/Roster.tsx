@@ -121,8 +121,8 @@ function PartyRow({
           secondary={
             <>
               <Typography component="span" variant="caption" color="text.secondary">
-                {[member.class_name, `Nv ${member.level}`].filter(Boolean).join(" · ")} · {member.hp_current}/
-                {member.hp_max} PV{member.hp_temp ? ` +${member.hp_temp}` : ""}
+                {[member.class_name, member.level_label ?? `Nv ${member.level}`].filter(Boolean).join(" · ")} ·{" "}
+                {member.hp_current}/{member.hp_max} PV{member.hp_temp ? ` +${member.hp_temp}` : ""}
                 {sceneName ? ` · ${sceneName}` : " · fora do mapa"}
               </Typography>
               <HpLine current={member.hp_current} max={member.hp_max} />

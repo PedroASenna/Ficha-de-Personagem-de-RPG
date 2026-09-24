@@ -326,4 +326,21 @@ describe("cenário, objetos, névoa e mundo", () => {
     expect(state.party[0]).toMatchObject({ level: 2, hp_max: 16 });
     expect(state.log.at(-1)).toMatchObject({ kind: "level", text: "Lyra subiu para o nível 2! (+6 PV)" });
   });
+
+  it("GURPS e Savage: atualiza o rótulo (pontos ou Estágio) do personagem", () => {
+    const state = tableReducer(loaded(), {
+      type: "character.leveled",
+      event_id: 78,
+      ts: "2026-09-24T10:00:00Z",
+      character: { id: "lyra", name: "Lyra" },
+      level: 1,
+      level_label: "155 pontos",
+      hp_current: 10,
+      hp_max: 10,
+      hp_temp: 0,
+      version: 6,
+      summary: "Lyra ganhou 5 pontos de personagem (155 pontos)",
+    });
+    expect(state.party[0]).toMatchObject({ level_label: "155 pontos" });
+  });
 });

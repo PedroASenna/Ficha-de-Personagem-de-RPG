@@ -24,6 +24,7 @@ from app.schemas.characters import (
     LoadOut,
 )
 from app.services import character_rules as rules
+from app.services import engines
 from app.services.character_rules import CUSTOM_KEY
 from app.services.hp import apply_hp
 from app.services.media import MediaStore
@@ -142,6 +143,18 @@ def apply_patch(pack: RulesetPack, character: Character, patch: CharacterPatch) 
     if data.get("level") is not None:
         character.level = data["level"]
 
+    if engines.uses_engine(pack):
+        if data.get("build") is not None:
+            engines.update_build(pack, character, data["build"])
+        elif "ancestry_key" in data:
+            engines.refresh(pack, character)
+        if data.get("hp_max") is not None:
+            raise DomainError("Neste sistema os PV saem da ficha.")
+        character.version += 1
+        return
+    if data.get("build") is not None:
+        raise DomainError("Este sistema não usa ficha de pontos.")
+
     # Valida as escolhas de bônus mesmo antes de haver atributos base.
     _bonuses(pack, character)
     _recompute_attributes(pack, character)
@@ -163,6 +176,8 @@ def generate_attributes(
     scores: dict[str, int] | None,
     rng: random.Random | None = None,
 ) -> None:
+    if engines.uses_engine(pack):
+        raise DomainError("Neste sistema os atributos são comprados na ficha.")
     base, rolls = rules.generate_base(pack, method, class_key=character.class_key, scores=scores, rng=rng)
     character.attribute_method = method
     kept = {k: v for k, v in (character.attribute_audit or {}).items() if k in ("advancement", "level_ups")}
@@ -172,10 +187,23 @@ def generate_attributes(
     character.version += 1
 
 
+def missing_for_finalize(pack: RulesetPack, character: Character) -> list[str]:
+    if not engines.uses_engine(pack):
+        return rules.missing_for_finalize(pack, character)
+    missing = [] if character.name.strip() else ["name"]
+    return missing + engines.missing(pack, character)
+
+
 def finalize(pack: RulesetPack, character: Character) -> None:
-    missing = rules.missing_for_finalize(pack, character)
+    missing = missing_for_finalize(pack, character)
     if missing:
         raise DomainError(f"Faltam dados para concluir: {', '.join(missing)}.")
+    if engines.uses_engine(pack):
+        engines.refresh(pack, character)
+        character.hp_current = character.hp_max
+        character.status = CharacterStatus.COMPLETE
+        character.version += 1
+        return
     character.hp_max = rules.compute_hp_max(
         pack,
         class_key=character.class_key,
@@ -193,7 +221,7 @@ def finalize(pack: RulesetPack, character: Character) -> None:
 
 def new_character(pack: RulesetPack, owner: User, name: str = "") -> Character:
     """Rascunho com todos os defaults preenchidos (o SQLAlchemy só aplica defaults no INSERT)."""
-    return Character(
+    character = Character(
         owner_id=owner.id,
         ruleset_id=pack.id,
         ruleset_version=pack.version,
@@ -204,8 +232,9 @@ def new_character(pack: RulesetPack, owner: User, name: str = "") -> Character:
         ancestry_bonus={},
         background_bonus={},
         level=1,
-        attributes={},
+        attributes=dict(engines.default_build(pack).get("attributes", {})),
         attribute_audit={},
+        build=engines.default_build(pack),
         hp_max=0,
         hp_current=0,
         hp_temp=0,
@@ -214,6 +243,9 @@ def new_character(pack: RulesetPack, owner: User, name: str = "") -> Character:
         notes="",
         version=1,
     )
+    if engines.uses_engine(pack):
+        engines.refresh(pack, character)
+    return character
 
 
 def quick_create(
@@ -221,6 +253,15 @@ def quick_create(
 ) -> Character:
     rng = rng or _rng
     character = new_character(pack, owner, data.name)
+    if engines.uses_engine(pack):
+        ancestry, build = engines.quick_build(pack)
+        character.ancestry_key = data.ancestry_key or ancestry
+        character.ancestry_name = pack.ancestry(character.ancestry_key).name if character.ancestry_key else None
+        character.build = build
+        engines.refresh(pack, character)
+        finalize(pack, character)
+        character.wizard_step = 5
+        return character
     ancestry = data.ancestry_key or (rng.choice(pack.ancestries).key if pack.ancestries else None)
     cls = data.class_key or (rng.choice(pack.classes).key if pack.classes else None)
     background = data.background_key or (rng.choice(pack.backgrounds).key if pack.backgrounds else None)
@@ -256,6 +297,8 @@ def level_up(
     """Sobe um nível: PV pela classe (5ª edição) ou digitados; pontos de atributo onde o sistema dá."""
     if character.status != CharacterStatus.COMPLETE:
         raise DomainError("Conclua o personagem antes de subir de nível.")
+    if engines.uses_engine(pack):
+        raise DomainError("Neste sistema o personagem evolui com pontos ou XP (experience).")
     new_level, points = rules.validate_level_up(
         pack, level=character.level, attributes=character.attributes or {}, increases=increases, hp_gain=hp_gain
     )
@@ -276,6 +319,27 @@ def level_up(
         character.hp_current = min(character.hp_max, character.hp_current + hp_gain)
     character.version += 1
     return {"level": new_level, "hp_gain": character.hp_max - hp_before, "attributes": points}
+
+
+def gain_experience(pack: RulesetPack, character: Character, amount: int) -> dict[str, Any]:
+    """GURPS: pontos de personagem para gastar; Savage Worlds: XP (a cada 5, um Progresso)."""
+    if character.status != CharacterStatus.COMPLETE:
+        raise DomainError("Conclua o personagem antes de ganhar experiência.")
+    summary = engines.gain(pack, character, amount)
+    character.version += 1
+    return {"level": character.level, "hp_gain": 0, "attributes": {}, "experience": amount, "summary": summary}
+
+
+def advance(pack: RulesetPack, character: Character, choice: Any) -> dict[str, Any]:
+    summary = engines.advance(pack, character, choice)
+    character.version += 1
+    return {"level": character.level, "hp_gain": 0, "attributes": {}, "summary": summary}
+
+
+def level_label(pack: RulesetPack, character: Character) -> str:
+    if engines.uses_engine(pack):
+        return engines.level_label(pack, character)
+    return f"Nível {character.level}"
 
 
 def level_summary(pack: RulesetPack, name: str, result: dict[str, Any]) -> str:
@@ -335,7 +399,7 @@ def to_out(pack: RulesetPack, character: Character, media: MediaStore) -> Charac
         ruleset_version=character.ruleset_version,
         status=character.status,
         wizard_step=character.wizard_step,
-        missing=rules.missing_for_finalize(pack, character) if character.status == CharacterStatus.DRAFT else [],
+        missing=missing_for_finalize(pack, character) if character.status == CharacterStatus.DRAFT else [],
         name=character.name,
         portrait_key=character.portrait_key,
         portrait_url=media.url(character.portrait_key) if character.portrait_key else None,
@@ -349,6 +413,7 @@ def to_out(pack: RulesetPack, character: Character, media: MediaStore) -> Charac
         background_name=character.background_name,
         background_bonus=character.background_bonus or {},
         level=character.level,
+        level_label=level_label(pack, character),
         attributes=attributes,
         modifiers={k: rules.modifier(pack, v) for k, v in attributes.items()},
         attribute_method=character.attribute_method,
@@ -374,5 +439,7 @@ def to_out(pack: RulesetPack, character: Character, media: MediaStore) -> Charac
             for a in character.abilities
         ],
         load=load_summary(pack, character),
+        build=character.build or {},
+        sheet=engines.sheet(pack, character) if engines.uses_engine(pack) else None,
         updated_at=character.updated_at,
     )

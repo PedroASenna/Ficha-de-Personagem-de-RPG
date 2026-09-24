@@ -2,6 +2,7 @@
 import { useSession } from '../state/session';
 import { apiUrl } from './config';
 import type {
+  AdvanceChoice,
   AttributeMethod,
   Character,
   RollResponse,
@@ -116,8 +117,13 @@ export const api = {
       method: 'POST',
       body: { delta, kind, expected_version },
     }),
-  levelUp: (id: string, body: { attributes: Record<string, number>; hp_gain: number | null; expected_version?: number }) =>
-    request<Character>(`/characters/${id}/level-up`, { method: 'POST', body }),
+  levelUp: (
+    id: string,
+    body: { attributes?: Record<string, number>; hp_gain?: number | null; experience?: number; expected_version?: number },
+  ) => request<Character>(`/characters/${id}/level-up`, { method: 'POST', body }),
+  /** Progresso do Savage Worlds. */
+  advance: (id: string, body: AdvanceChoice & { expected_version?: number }) =>
+    request<Character>(`/characters/${id}/advance`, { method: 'POST', body }),
   rest: (id: string, type: 'short' | 'long') => request<Character>(`/characters/${id}/rest`, { method: 'POST', body: { type } }),
   useSpellSlot: (id: string, level: string) => request<Character>(`/characters/${id}/spell-slots/${level}/use`, { method: 'POST' }),
   addItem: (id: string, body: { name: string; quantity: number; weight_each: string }) =>
@@ -127,7 +133,8 @@ export const api = {
     request<Character>(`/characters/${id}/abilities`, { method: 'POST', body }),
   useAbility: (id: string, abilityId: string) => request<Character>(`/characters/${id}/abilities/${abilityId}/use`, { method: 'POST' }),
 
-  roll: (notation: string, ruleset_id?: string) => request<RollResponse>('/dice/roll', { method: 'POST', body: { notation, ruleset_id } }),
+  roll: (notation: string, ruleset_id?: string, check?: { target?: number; wild?: boolean }) =>
+    request<RollResponse>('/dice/roll', { method: 'POST', body: { notation, ruleset_id, ...check } }),
 
   rooms: () => request<Room[]>('/rooms'),
   createRoom: (name: string, ruleset_id: string, max_players = 8) =>

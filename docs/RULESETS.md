@@ -12,6 +12,8 @@ Para caber num app distribuído (mesmo que só como APK para o grupo), a licenç
 |---|---|---|---|---|
 | **5ª Edição, SRD 5.1** (2014) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) | ✅ Sim | **Disponível** (`srd-5.1`) | Exige atribuição (texto no pacote, exibido no app). CC-BY não licencia marcas: usar "compatível com a 5ª edição", nunca "D&D" como nome. |
 | **5ª Edição 2024, SRD 5.2.1** | CC-BY-4.0 | ✅ Sim | **Disponível** (`srd-5.2`) | Publicado em 22/04/2025. Wizards declarou que SRDs futuros também sairão em CC-BY-4.0, e a licença é irrevogável. |
+| **GURPS 4ª Edição** | [SJG Online Policy](https://www.sjgames.com/general/online_policy.html) | ✅ Sim, gratuito e não comercial | **Disponível** (`gurps-4e`) | Auxílio de jogo gratuito com o aviso da Steve Jackson Games. Só nomes, custos e páginas das listas do livro (como o [GCS](https://github.com/richardwilkes/gcs_master_library)); nada do texto das regras. |
+| **Savage Worlds** | [Savage Worlds Fan License](https://peginc.com/licensing/) | ✅ Sim, gratuito | **Disponível** (`savage-worlds`) | Produto de fã gratuito com o aviso da Pinnacle. A licença pede o logo "Savage Worlds Fan" na tela principal do produto: **falta colocar** (o site da Pinnacle não abre deste ambiente). Só nomes, requisitos e páginas. |
 | **Genérico / homebrew** | Original | ✅ Sim | **Disponível** (`generico`) | Raça e origem digitadas pelo jogador, com os pontos de atributo de cada uma; classe da lista ou em texto livre. Serve de "ficha em branco" para sistemas cuja licença não permite regras em apps. |
 | **Old Dragon 2** (SRD) | CC-BY-SA-4.0 | ✅ Sim | Planejado | SRD aberto e irrevogável, com uso comercial. O *share-alike* se aplica ao **pacote de dados** (JSON), não ao código do app, se mantido separado. Sistema brasileiro: próximo da fila. |
 | **Pathfinder 2e Remaster** | ORC | ✅ Sim | Planejado | Regras sob ORC. Nomes, marcas e cenário são *Reserved Material*: não podem aparecer como nome do sistema no app. |
@@ -23,7 +25,9 @@ Para caber num app distribuído (mesmo que só como APK para o grupo), a licenç
 | **Daggerheart** | Darrington Press Community Gaming License | ⚠️ Incerto | Restrito | A licença cobre suplementos impressos/digitais e streams, mas **não cobre explicitamente aplicativos**. Só com autorização por escrito. |
 | **Ordem Paranormal** | Licença da Comunidade (jun/2026) | ⚠️ Revisar | Restrito | Resumos indicam que permite vender material em apps, mas **não abre o sistema**: é licença de conteúdo de fã e comercial com condições. Precisa de leitura jurídica integral. |
 | **Tormenta20 / 3DeT Victory** | Licença Aberta Jambô (jun/2026) | ❌ Não | **Excluído** | A licença **proíbe explicitamente aplicativos, sites e VTTs**. Só permite fichas preenchíveis. Para jogar Tormenta no app, use o sistema **Genérico** (ficha em branco, sem texto de regras). |
-| Call of Cthulhu, GURPS, Savage Worlds, Vampiro… | Proprietárias | ❌ Não | Fora | Sem licença aberta para software. Só com contrato de licenciamento. |
+| Call of Cthulhu, Vampiro… | Proprietárias | ❌ Não | Fora | Sem licença aberta para software. Só com contrato de licenciamento. |
+
+> ⚠️ **GURPS e Savage Worlds só valem enquanto o RPG Play for gratuito.** As duas permissões são para uso não comercial, sem venda nem conteúdo pago. Se o projeto um dia for vendido (ou tiver versão paga), esses pacotes precisam sair ou ganhar uma licença de verdade com as editoras.
 
 Os sistemas "planejados" e "restritos" aparecem na tela de criação de mesa **desabilitados**, com o motivo, para o Mestre entender por que não pode escolhê-los. Eles vêm de `backend/app/rulesets/data/catalog.json`.
 
@@ -34,6 +38,9 @@ Os sistemas "planejados" e "restritos" aparecem na tela de criação de mesa **d
 
 As duas acompanham a nota "Tradução e adaptação para o português por RPG Play", porque a CC-BY exige indicar as modificações.
 
+- **GURPS 4ª Edição** (Online Policy da SJG): *"GURPS é uma marca registrada da Steve Jackson Games, e suas regras e arte são protegidas por direitos autorais da Steve Jackson Games. Todos os direitos reservados pela Steve Jackson Games. Este material de apoio é criação original do RPG Play e é distribuído gratuitamente, não para venda, sob as permissões da Online Policy da Steve Jackson Games."*
+- **Savage Worlds** (Fan License): *"Este jogo faz referência ao sistema Savage Worlds, disponível pela Pinnacle Entertainment Group em www.peginc.com. Savage Worlds e todos os logotipos e marcas associados são marcas da Pinnacle Entertainment Group. Usado com permissão. A Pinnacle não garante a qualidade deste produto."*
+
 ## O que os pacotes trazem hoje
 
 Os pacotes trazem só o **necessário para criar o personagem rápido**, com descrições curtas escritas por nós (não é cópia do texto do SRD):
@@ -43,12 +50,23 @@ Os pacotes trazem só o **necessário para criar o personagem rápido**, com des
 - **generico**: 6 atributos neutros, 4 arquétipos para a geração automática. **Raça e origem são obrigatórias e digitadas**, cada uma com pontos de atributo à mão (de -5 a +5 por atributo, `custom_bonus`). Ao subir de nível, o jogador informa os PV ganhos e soma até 10 pontos de atributo (`level_up.free_points`), até o nível 30.
 - **srd-5.1 / srd-5.2**: ao subir de nível, os PV vêm da classe (dado cheio no 1º nível, média fixa depois) e os níveis 4, 8, 12, 16 e 19 dão +2 em atributos (ou nada, para quem pega um talento), sem passar de 20.
 
+- **gurps-4e** (nomes da edição brasileira, páginas do *Módulo Básico: Personagens*): tirado das listas do fim do livro (págs. 297-306).
+  - 489 vantagens, desvantagens, qualidades e peculiaridades, com custo estruturado: fixo, por nível (com opções e valor base), faixa, opções, variável e autocontrole (6, 9, 12 ou 15).
+  - 273 perícias (atributo, dificuldade, valor pré-definido pelo atributo, especialização) e 100 mágicas; a Aptidão Mágica soma nas mágicas.
+  - A tabela de dano por ST. Duas linhas da lista do livro divergem da descrição da perícia (Criptografia e Culinária são IQ); valeu a descrição.
+  - Criação: 150 pontos por padrão (100 a 250), limite de desvantagens em 50% dos pontos iniciais, até 5 peculiaridades. Evolução: o Mestre dá pontos, o jogador gasta na ficha.
+- **savage-worlds** (nomes e páginas do *Savage Worlds Edição Brasileira*, RetroPunk):
+  - 11 raças, com o que cada uma muda (dado inicial, Movimentação, Resistência, Carisma, Benes, Vantagem grátis, Complicação e perícia da raça).
+  - 27 perícias (as 4 arcanas incluídas), 43 Complicações (Menor, Maior ou as duas), 108 Vantagens com requisitos estruturados (Estágio, atributos, perícias, outras Vantagens; o resto aparece para o Mestre conferir) e 50 Poderes (Estágio, PP, distância, duração).
+  - Efeitos aplicados sozinhos nas derivadas: Atraente, Carismático, Bloquear, Ligeiro, Duro na Queda, Sorte, Feio, Manco, Obeso, Pequeno, Má Sorte, Jovem, Idoso...
+  - Criação pela pág. 54; Progressos pela pág. 53 (atributo uma vez por Estágio, perícias abaixo/acima do atributo, perícia nova, Vantagem com requisitos).
+
 > 🔎 Os dados foram digitados a partir do conhecimento dos SRDs. **Confira contra o documento oficial antes do lançamento**, principalmente bônus, deslocamento, dados de vida e espaços de magia do nível 1.
 
 ## Como adicionar um sistema
 
 1. Crie `backend/app/rulesets/data/<id>.json` seguindo `RulesetPack` (`backend/app/rulesets/schema.py`). O Pydantic valida as referências cruzadas: toda classe precisa ordenar **todos** os atributos em `attribute_priority`, os bônus só podem citar atributos existentes etc.
-2. Escolha as estratégias declarativas (sem fórmulas livres, sem `eval`):
+2. Sistemas com criação própria usam `engine` (`gurps` ou `savage`) com `skills`, `traits` e o bloco de regras do motor (`gurps` / `savage`); a lógica fica em `backend/app/services/engines/`. Os demais usam `engine: "classic"` e escolhem as estratégias declarativas (sem fórmulas livres, sem `eval`):
    - `modifier.strategy`: `dnd` · `raw` · `none`
    - `hp.strategy`: `hit_die_max_plus_mod` · `fixed` · `manual`
    - `carry.strategy`: `attribute_multiplier` · `fixed`

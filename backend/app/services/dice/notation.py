@@ -4,9 +4,10 @@ Gramática aceita (espaços são ignorados, maiúsculas/minúsculas tanto faz):
 
     expressao := termo (('+' | '-') termo)*
     termo     := dados | inteiro
-    dados     := [N] 'd' (LADOS | '%') [('kh' | 'kl') K]
+    dados     := [N] 'd' (LADOS | '%') ['!'] [('kh' | 'kl') K]
 
 Exemplos: ``d20``, ``1d20+5``, ``2d20kh1`` (vantagem), ``4d6kh3``, ``d%``, ``3d6-2``, ``1d1000``.
+``!`` = dado que explode (Savage Worlds): no valor máximo rola de novo e soma, ex.: ``1d8!``.
 """
 
 import re
@@ -17,7 +18,9 @@ MAX_DICE = 100
 MAX_MODIFIER = 10_000
 MAX_NOTATION_LENGTH = 64
 
-_TERM = re.compile(r"(?:(?P<count>\d*)d(?P<sides>\d+|%)(?:(?P<keep>kh|kl)(?P<keep_n>\d+))?|(?P<const>\d+))")
+_TERM = re.compile(
+    r"(?:(?P<count>\d*)d(?P<sides>\d+|%)(?P<explode>!)?(?:(?P<keep>kh|kl)(?P<keep_n>\d+))?|(?P<const>\d+))"
+)
 
 
 class NotationError(ValueError):
@@ -31,6 +34,7 @@ class DiceTerm:
     sign: int = 1
     keep: str | None = None  # "kh" ou "kl"
     keep_n: int | None = None
+    explode: bool = False
 
     @property
     def kept_count(self) -> int:
@@ -38,7 +42,7 @@ class DiceTerm:
 
     def canonical(self) -> str:
         suffix = f"{self.keep}{self.keep_n}" if self.keep else ""
-        return f"{self.count}d{self.sides}{suffix}"
+        return f"{self.count}d{self.sides}{'!' if self.explode else ''}{suffix}"
 
 
 @dataclass(frozen=True)
@@ -99,7 +103,10 @@ def parse(notation: str) -> DiceExpression:
         keep_n = int(match.group("keep_n")) if keep else None
         if keep_n is not None and not 1 <= keep_n <= count:
             raise NotationError(f"Não dá para manter {keep_n} de {count} dados.")
-        terms.append(DiceTerm(count=count, sides=sides, sign=sign, keep=keep, keep_n=keep_n))
+        explode = match.group("explode") is not None
+        if explode and sides < 3:
+            raise NotationError("Só dados de 3 lados ou mais podem explodir.")
+        terms.append(DiceTerm(count=count, sides=sides, sign=sign, keep=keep, keep_n=keep_n, explode=explode))
 
     if not terms:
         raise NotationError("A expressão precisa ter pelo menos um dado.")

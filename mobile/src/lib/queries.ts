@@ -11,7 +11,8 @@ export const keys = {
 };
 
 export const useCharacters = () => useQuery({ queryKey: keys.characters, queryFn: api.characters });
-export const useCharacter = (id: string) => useQuery({ queryKey: keys.character(id), queryFn: () => api.character(id) });
+export const useCharacter = (id: string | undefined) =>
+  useQuery({ queryKey: keys.character(id ?? ''), queryFn: () => api.character(id!), enabled: !!id });
 export const useRulesets = () => useQuery({ queryKey: keys.rulesets, queryFn: api.rulesets, staleTime: 10 * 60_000 });
 export const useRulesetPack = (id: string | null | undefined) =>
   useQuery({ queryKey: keys.ruleset(id ?? ''), queryFn: () => api.ruleset(id!), enabled: !!id, staleTime: 60 * 60_000 });

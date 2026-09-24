@@ -37,6 +37,9 @@ function NpcForm({ roomId, npc, onClose }: Props) {
   const [busy, setBusy] = useState(false);
 
   const attrs = ruleset.data?.attributes ?? [];
+  const engine = ruleset.data?.engine;
+  // Savage Worlds: atributos em tipo de dado (d4 a d12); o resto começa na média 10.
+  const base = engine === "savage" ? 6 : 10;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -46,7 +49,7 @@ function NpcForm({ roomId, npc, onClose }: Props) {
       portrait_key: portrait.key,
       hp_max: hpMax,
       armor_class: armorClass === "" ? null : Number(armorClass),
-      attributes: Object.fromEntries(attrs.map((a) => [a.key, attributes[a.key] ?? 10])),
+      attributes: Object.fromEntries(attrs.map((a) => [a.key, attributes[a.key] ?? base])),
       notes,
     };
     const saved = npc ? await updateNpc(npc.id, body) : await createNpcs(roomId, { ...body, count });
@@ -94,7 +97,7 @@ function NpcForm({ roomId, npc, onClose }: Props) {
                   value={armorClass}
                   onChange={(e) => setArmorClass(e.target.value)}
                   slotProps={{ htmlInput: { min: 0, max: 99, "aria-label": "Classe de Armadura" } }}
-                  helperText="Classe de Armadura"
+                  helperText={engine === "savage" ? "Aparar" : engine === "gurps" ? "Defesa" : "Classe de Armadura"}
                   sx={{ flex: 1 }}
                 />
                 {!npc && (
@@ -118,7 +121,7 @@ function NpcForm({ roomId, npc, onClose }: Props) {
               </Typography>
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                 {attrs.map((attr) => {
-                  const value = attributes[attr.key] ?? 10;
+                  const value = attributes[attr.key] ?? base;
                   return (
                     <TextField
                       key={attr.key}
@@ -126,8 +129,19 @@ function NpcForm({ roomId, npc, onClose }: Props) {
                       type="number"
                       value={value}
                       onChange={(e) => setAttributes({ ...attributes, [attr.key]: Number(e.target.value) })}
-                      helperText={formatModifier(abilityModifier(value))}
-                      slotProps={{ htmlInput: { min: 1, max: 30, "aria-label": attr.name } }}
+                      helperText={
+                        engine === "savage"
+                          ? `d${value}`
+                          : engine === "gurps"
+                            ? `3d6 ≤ ${value}`
+                            : formatModifier(abilityModifier(value))
+                      }
+                      slotProps={{
+                        htmlInput:
+                          engine === "savage"
+                            ? { min: 4, max: 12, step: 2, "aria-label": attr.name }
+                            : { min: 1, max: 30, "aria-label": attr.name },
+                      }}
                       sx={{ width: 84 }}
                     />
                   );

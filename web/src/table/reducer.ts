@@ -122,6 +122,7 @@ export type TableAction =
       ts: string;
       character: { id: string; name: string };
       level: number;
+      level_label?: string | null;
       hp_current: number;
       hp_max: number;
       hp_temp: number;
@@ -308,6 +309,7 @@ export function tableReducer(state: TableState, action: TableAction): TableState
           ? {
               ...p,
               level: action.level,
+              level_label: action.level_label ?? p.level_label,
               hp_current: action.hp_current,
               hp_max: action.hp_max,
               hp_temp: action.hp_temp,

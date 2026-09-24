@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import DomainError, ForbiddenError, NotFoundError
 from app.models import Character, Faction, Npc, Room, RoomMember, Scene, SceneImage, SceneObject, Token, User
 from app.models.enums import RoomRole
+from app.rulesets.loader import get_registry
+from app.services import engines
 from app.services import fog as fog_service
 from app.services import world as world_service
 from app.services.hp import CONDITION_LABEL, condition
@@ -149,6 +151,14 @@ def token_visible(token: Token, container: SceneObject | None, viewer_character_
     return True
 
 
+def level_label(character: Character) -> str:
+    """ "Nível 3" nos sistemas clássicos; pontos (GURPS) ou Estágio (Savage Worlds) nos outros."""
+    pack = get_registry().get(character.ruleset_id)
+    if pack is None or not engines.uses_engine(pack):
+        return f"Nível {character.level}"
+    return engines.level_label(pack, character)
+
+
 async def party_out(session: AsyncSession, room: Room, media: MediaStore) -> list[dict[str, Any]]:
     """Personagens sentados à mesa (todos veem nome, classe e PV do grupo)."""
     rows = (
@@ -166,6 +176,7 @@ async def party_out(session: AsyncSession, room: Room, media: MediaStore) -> lis
             "class_name": c.class_name,
             "ancestry_name": c.ancestry_name,
             "level": c.level,
+            "level_label": level_label(c),
             "portrait_url": media.url(c.portrait_key) if c.portrait_key else None,
             "hp_current": c.hp_current,
             "hp_max": c.hp_max,

@@ -14,6 +14,10 @@ export type ClientMessage =
       visibility: "public" | "master_only";
       character_id?: string;
       npc_id?: string;
+      /** Teste: NH (GURPS), dificuldade (Savage) ou CD. */
+      target?: number;
+      /** Dado Selvagem (Savage Worlds). */
+      wild?: boolean;
     }
   | { type: "hp.change"; delta: number; kind: "damage" | "heal" | "temp"; character_id?: string; npc_id?: string }
   | { type: "token.move"; token_id: string; x: number; y: number }

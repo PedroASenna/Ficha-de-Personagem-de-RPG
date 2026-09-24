@@ -197,6 +197,8 @@ export interface PartyMember {
   class_name: string | null;
   ancestry_name: string | null;
   level: number;
+  /** "Nível 3", "150 pontos" (GURPS) ou "Experiente" (Savage Worlds). */
+  level_label?: string | null;
   portrait_url: string | null;
   hp_current: number;
   hp_max: number;
@@ -234,6 +236,7 @@ export interface CharacterSheet {
   class_name: string | null;
   background_name: string | null;
   level: number;
+  level_label?: string;
   attributes: Record<string, number>;
   modifiers: Record<string, number>;
   status: "draft" | "complete";
@@ -246,6 +249,41 @@ export interface CharacterSheet {
   items: { id: string; name: string; quantity: number; weight_each: string | number; equipped: boolean }[];
   abilities: { id: string; name: string; level: number; uses_max: number; uses_spent: number; available: boolean }[];
   load: { total_weight: number; capacity: number; unit: string; encumbered: boolean; ratio: number };
+  /** GURPS e Savage Worlds: ficha calculada pelo servidor. */
+  sheet?: EngineSheet | null;
+}
+
+/** Teste pronto: GURPS rola 3d6 contra o NH (target); Savage rola o dado + Dado Selvagem (wild). */
+export interface SheetCheck {
+  key: string;
+  label: string;
+  notation: string;
+  target?: number;
+  wild?: boolean;
+  group: string;
+}
+
+export interface EngineSheet {
+  engine: "gurps" | "savage";
+  derived: { key: string; label: string; value: number | string; current?: number }[];
+  skills: { key: string; name: string; level?: number; relative?: string; label?: string; attribute?: string }[];
+  traits: {
+    key: string;
+    name: string;
+    note: string;
+    kind: string;
+    cost?: number;
+    severity?: "minor" | "major";
+    page: string | null;
+    unmet?: string[];
+  }[];
+  checks: SheetCheck[];
+  warnings: string[];
+  points?: { total: number; unspent: number; disadvantages: number; disadvantage_limit: number };
+  rank?: { index: number; name: string };
+  xp?: number;
+  advances?: { earned: number; taken: number; available: number };
+  attributes?: { key: string; name: string; die: number; label: string }[];
 }
 
 export interface ImageUpload {

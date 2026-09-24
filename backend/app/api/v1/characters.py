@@ -11,6 +11,7 @@ from app.models import Character, CharacterAbility, InventoryItem, User
 from app.models.enums import SessionEventType
 from app.schemas.characters import (
     AbilityIn,
+    AdvanceIn,
     AttributeGenerateIn,
     CharacterCreate,
     CharacterOut,
@@ -24,6 +25,7 @@ from app.schemas.characters import (
     RestIn,
 )
 from app.services import characters as service
+from app.services.engines.savage import AdvanceIn as SavageAdvance
 from app.ws.events import announce_hp_change, announce_level_up, rooms_with_character
 
 router = APIRouter(prefix="/characters", tags=["personagens"])
@@ -235,7 +237,18 @@ async def level_up_and_announce(
     if data.expected_version is not None and data.expected_version != character.version:
         raise ConflictError("A ficha mudou enquanto você editava. Confira o nível atual.")
     pack = service.pack_for(state.registry, character.ruleset_id)
-    result = service.level_up(pack, character, data.attributes, data.hp_gain)
+    if data.experience is not None:
+        result = service.gain_experience(pack, character, data.experience)
+        summary = result["summary"]
+    else:
+        result = service.level_up(pack, character, data.attributes, data.hp_gain)
+        summary = service.level_summary(pack, character.name, result)
+    await _announce_progress(db, state, user, pack, character, result, summary)
+
+
+async def _announce_progress(
+    db: AsyncSession, state: AppState, user: User, pack, character: Character, result: dict, summary: str
+) -> None:
     rooms = [r.id for r in await rooms_with_character(db, character.id)]
     if not rooms:
         await db.commit()
@@ -246,8 +259,8 @@ async def level_up_and_announce(
         room_ids=rooms,
         actor_id=user.id,
         character=character,
-        result=result,
-        summary=service.level_summary(pack, character.name, result),
+        result={**result, "level_label": service.level_label(pack, character)},
+        summary=summary,
     )
 
 
@@ -262,6 +275,25 @@ async def level_up(
     """Sobe um nível: PV pela classe (5ª edição) ou os que o jogador informar; pontos de atributo onde o sistema dá."""
     character = await service.get_owned(db, user, character_id)
     await level_up_and_announce(db, state, user, character, data)
+    return await _out(db, state, character_id)
+
+
+@router.post("/{character_id}/advance", response_model=CharacterOut)
+async def advance(
+    character_id: uuid.UUID,
+    data: AdvanceIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    """Progresso do Savage Worlds: nova Vantagem, atributo, perícias ou perícia nova."""
+    character = await service.get_owned(db, user, character_id)
+    if data.expected_version is not None and data.expected_version != character.version:
+        raise ConflictError("A ficha mudou enquanto você escolhia. Confira e tente de novo.")
+    pack = service.pack_for(state.registry, character.ruleset_id)
+    choice = SavageAdvance(**data.model_dump(exclude={"expected_version"}))
+    result = service.advance(pack, character, choice)
+    await _announce_progress(db, state, user, pack, character, result, result["summary"])
     return await _out(db, state, character_id)
 
 

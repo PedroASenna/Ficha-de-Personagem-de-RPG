@@ -6,6 +6,15 @@ export type Rng = (sides: number) => number;
 
 export const defaultRng: Rng = (sides) => 1 + Math.floor(Math.random() * sides);
 
+/** Igual ao backend: um dado que explode para depois de 20 explosões (proteção contra laço). */
+export const MAX_EXPLOSIONS = 20;
+
+function rollDie(sides: number, explode: boolean, rng: Rng): number[] {
+  const rolls = [rng(sides)];
+  while (explode && rolls[rolls.length - 1] === sides && rolls.length <= MAX_EXPLOSIONS) rolls.push(rng(sides));
+  return rolls;
+}
+
 function keepFlags(values: number[], keep: 'kh' | 'kl' | undefined, keepN: number | undefined): boolean[] {
   if (!keep || keepN === undefined) return values.map(() => true);
   // Empate: mantém o que saiu primeiro (mesma regra do backend).
@@ -20,9 +29,15 @@ function keepFlags(values: number[], keep: 'kh' | 'kl' | undefined, keepN: numbe
 
 export function rollLocal(expr: DiceExpression, rng: Rng = defaultRng): RollPayload {
   const terms = expr.terms.map((term) => {
-    const values = Array.from({ length: term.count }, () => rng(term.sides));
+    const rolled = Array.from({ length: term.count }, () => rollDie(term.sides, !!term.explode, rng));
+    const values = rolled.map((r) => r.reduce((a, b) => a + b, 0));
     const flags = keepFlags(values, term.keep, term.keepN);
-    const dice = values.map((value, i) => ({ sides: term.sides, value, kept: flags[i] ?? true }));
+    const dice = values.map((value, i) => ({
+      sides: term.sides,
+      value,
+      kept: flags[i] ?? true,
+      ...(rolled[i]!.length > 1 ? { rolls: rolled[i] } : {}),
+    }));
     const subtotal = term.sign * dice.filter((d) => d.kept).reduce((sum, d) => sum + d.value, 0);
     return { notation: termToString(term), sign: term.sign, dice, subtotal };
   });

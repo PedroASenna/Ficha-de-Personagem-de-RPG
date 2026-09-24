@@ -167,7 +167,12 @@ export const resetFog = (sceneId: string, characterId: string | null = null) =>
 export const levelUp = (
   roomId: string,
   characterId: string,
-  body: { attributes: Record<string, number>; hp_gain: number | null; expected_version?: number },
+  body: {
+    attributes?: Record<string, number>;
+    hp_gain?: number | null;
+    experience?: number;
+    expected_version?: number;
+  },
 ) => guarded(api<CharacterSheet>(`/rooms/${roomId}/characters/${characterId}/level-up`, { json: body }));
 
 // ---------- mapa-múndi ----------

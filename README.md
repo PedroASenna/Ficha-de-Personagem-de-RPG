@@ -9,7 +9,9 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Wi
 - **Névoa de guerra:** cada jogador vê preto onde o personagem dele ainda não andou; o Mestre vê o inexplorado levemente escurecido.
 - **Mapa-múndi** com fichas de **nações e facções**, relações entre elas e o que o grupo já descobriu.
 - **No celular, o jogador vê o mapa da cena onde está**, com os bonecos andando ao vivo. Dos inimigos, vê só nome, imagem e se estão **Ilesos, Feridos, Muito feridos ou Caídos**.
-- **Sistema genérico** com raça e origem digitadas e pontos de atributo à mão; **ângulo ajustável** em toda imagem enviada.
+- **Sistemas de regras:** 5ª Edição (SRD 5.1 e 5.2), **GURPS 4ª Edição** (pontos de personagem, vantagens, desvantagens, perícias e mágicas da lista do livro, teste de 3d6 contra o NH com sucesso decisivo e falha crítica), **Savage Worlds** (dados de d4 a d12 que explodem, Dado Selvagem, ampliações, Complicações, Vantagens com requisitos, Estágios e Progressos) e um **genérico** com raça e origem digitadas.
+- **Testes da ficha com um toque:** no celular e no painel, a perícia já rola do jeito certo para o sistema (o NH ou o dado vem pronto do servidor).
+- **Ângulo ajustável** em toda imagem enviada.
 - **Contas locais** (usuário e senha no servidor) e **campanhas salvas**: arquivar e reabrir de onde parou.
 
 | Peça | Instalador | Tecnologia |
@@ -88,21 +90,22 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 
 ## Verificação feita
 
-- **Servidor:** 141 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+- **Servidor:** 169 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
   - contas locais e admin;
   - descoberta HTTP e UDP;
   - campanhas arquivadas e reabertas;
   - permissões da mesa;
   - WebSocket com três conexões (o `token.move` só chega a quem está na cena, a separação do grupo gera `view.reset`, o dano em inimigo manda números só ao Mestre);
   - backup e restauração, inclusive recusando tar malicioso;
+  - 0.4: GURPS (custos de atributos, secundárias, vantagens com nível/opções/autocontrole, perícias 1-2-4-8, Aptidão Mágica nas mágicas, limite de desvantagens e peculiaridades, pontos novos só gastam o que têm) e Savage Worlds (raças, orçamento da criação pago por Complicações, Aparar/Resistência/Carisma pelos efeitos, requisitos, Progressos com as regras de Estágio); dados que explodem, Dado Selvagem, olhos de cobra, tabela de críticos do GURPS e rolagem pela mesa com o teste no log;
   - 0.3: várias peças de cenário com rotação (e o arquivo só apagado quando a última peça sai), objetos levando e girando os ocupantes e escondendo quem está dentro, névoa só com a exploração de cada jogador (caminho explorado, reset, grade nova descarta), rotação em todo envio de imagem, mapa-múndi revelado aos poucos sem notas secretas, subir de nível (5ª edição e genérico) e raça/origem digitadas com pontos.
 
-  `ruff` e `black` limpos. As migrações 0002 e 0003 passam por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados.
+  `ruff` e `black` limpos. As migrações 0002, 0003 e 0004 passam por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados.
 - **Pacote `.deb` do servidor:** gerado aqui com Python portátil (exige glibc ≥ 2.28) e instalado com `dpkg`, rodando como o usuário `rpgplay`. Funcionaram:
   - `/health`, `/mestre`, descoberta por **broadcast UDP** e smoke test;
   - `reset-password`, `backup` e `restore` pelo comando `rpgplay-server`;
   - atualização mantendo o `server.env`, `remove` mantendo as campanhas e `purge` apagando tudo.
-- **Painel do Mestre:** 44 testes Vitest. Um teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
+- **Painel do Mestre:** 48 testes Vitest. Dois testes Playwright abrem mesas de GURPS e de Savage Worlds: o Mestre rola a perícia pela ficha (NH 17 no GURPS; dado + Dado Selvagem no Savage) e dá pontos/XP, conferindo o que chega à jogadora. Outro teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
   - criar conta e mesa;
   - enviar um mapa;
   - receber a jogadora ao vivo;
@@ -130,7 +133,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - aceita o IP digitado.
 
   O `.exe` (NSIS) foi gerado aqui com wine, com ícone e metadados conferidos.
-- **App:** 105 testes Jest (descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
+- **App:** 119 testes Jest (ficha de GURPS e Savage, dados que explodem, texto dos testes, descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
 - **Não verificado aqui:**
   - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
   - o `.exe` do **programa do Mestre** não rodou num Windows de verdade (o do servidor roda no CI);
@@ -143,3 +146,4 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 2. Régua de distância no mapa; iniciativa (ordem de turno) no painel; paredes que bloqueiam a visão na névoa.
 3. Anunciar o servidor por mDNS (`rpgplay.local`) para quem não quer IP fixo.
 4. Pacote **Old Dragon 2** (CC-BY-SA, pt-BR) e dados Fudge/paradas de d6 para Fate, Year Zero e Forged in the Dark.
+5. Savage Worlds: iniciativa com cartas (o Baralho de Ação) e o logo "Savage Worlds Fan" na tela do sistema (exigência da Fan License).

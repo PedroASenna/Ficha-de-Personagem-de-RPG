@@ -126,7 +126,10 @@ export class RoomSocket {
     for (const id of [...this.pending.keys()]) this.fail(id, err);
   }
 
-  requestRoll(notation: string, opts: { characterId?: string; label?: string; secret?: boolean } = {}): Promise<RollResultMsg> {
+  requestRoll(
+    notation: string,
+    opts: { characterId?: string; label?: string; secret?: boolean; target?: number; wild?: boolean } = {},
+  ): Promise<RollResultMsg> {
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.fail(id, new Error('O servidor não respondeu. Tente de novo.')), ROLL_TIMEOUT_MS);
@@ -138,6 +141,8 @@ export class RoomSocket {
         character_id: opts.characterId,
         label: opts.label,
         visibility: opts.secret ? 'master_only' : 'public',
+        ...(opts.target !== undefined ? { target: opts.target } : {}),
+        ...(opts.wild ? { wild: true } : {}),
       });
       if (!sent) this.fail(id, new Error('Sem conexão com a mesa.'));
     });

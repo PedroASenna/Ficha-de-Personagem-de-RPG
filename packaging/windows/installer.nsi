@@ -1,6 +1,6 @@
 ; Instalador do servidor RPG Play para Windows (NSIS 3, Unicode).
 ;
-;   makensis /DVERSION=0.3.1 /DSRC=<pasta rpgplay-server do PyInstaller> /DOUTFILE=<saída.exe> installer.nsi
+;   makensis /DVERSION=0.4.0 /DSRC=<pasta rpgplay-server do PyInstaller> /DOUTFILE=<saída.exe> installer.nsi
 ;
 ; Instala em "Arquivos de Programas\RPG Play Servidor", guarda campanhas em "ProgramData\RPG Play\servidor"
 ; (mantidas ao desinstalar, a não ser que a pessoa peça para apagar), cria os atalhos do menu Iniciar,

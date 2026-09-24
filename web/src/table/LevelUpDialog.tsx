@@ -138,3 +138,70 @@ export function LevelUpDialog({ roomId, sheet, pack, onClose }: Props) {
     </Dialog>
   );
 }
+
+/** GURPS: pontos de personagem; Savage Worlds: XP (a cada 5, um Progresso que o jogador escolhe no app). */
+export function ExperienceDialog({
+  roomId,
+  sheet,
+  engine,
+  onClose,
+}: {
+  roomId: string;
+  sheet: CharacterSheet;
+  engine: "gurps" | "savage";
+  onClose: () => void;
+}) {
+  const [amount, setAmount] = useState(engine === "gurps" ? 5 : 2);
+  const [busy, setBusy] = useState(false);
+  const gurps = engine === "gurps";
+  const submit = async () => {
+    setBusy(true);
+    const saved = await levelUp(roomId, sheet.id, { experience: amount, expected_version: sheet.version });
+    setBusy(false);
+    if (saved) onClose();
+  };
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>
+        {sheet.name}: {gurps ? "dar pontos de personagem" : "dar experiência"}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {gurps
+              ? "Os pontos ficam livres na ficha: o jogador gasta no app (atributos, perícias, vantagens ou recomprar desvantagens)."
+              : "1 XP: sessão curta ou pouco avanço. 2: mais sucessos que falhas. 3: grande impacto na história. A cada 5 XP o jogador faz um Progresso no app."}
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            {(gurps ? [1, 2, 3, 5, 10] : [1, 2, 3]).map((n) => (
+              <Button
+                key={n}
+                variant={amount === n ? "contained" : "outlined"}
+                size="small"
+                onClick={() => setAmount(n)}
+              >
+                +{n}
+              </Button>
+            ))}
+          </Stack>
+          <TextField
+            type="number"
+            label={gurps ? "Pontos" : "XP"}
+            value={amount}
+            onChange={(e) => setAmount(Math.min(1000, Math.max(1, Number(e.target.value))))}
+            slotProps={{ htmlInput: { min: 1, max: 1000 } }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Hoje: {sheet.level_label}
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button variant="contained" loading={busy} disabled={amount < 1} onClick={() => void submit()}>
+          Dar {amount} {gurps ? "pontos" : "XP"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

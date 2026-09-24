@@ -1,7 +1,7 @@
 {
   "name": "rpgplay-mestre",
   "productName": "RPG Play Mestre",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Programa do Mestre: encontra o servidor RPG Play na rede de casa e abre a mesa virtual",
   "author": "RPG Play <rpgplay@localhost>",
   "license": "UNLICENSED",

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Character, Room, RoomMember
 from app.models.enums import RoomStatus, SessionEventType, Visibility
-from app.services.dice import Tier
+from app.services.dice import Tier, check_suffix
 from app.services.rooms import record_event
 from app.ws.broadcaster import Broadcaster
 from app.ws.protocol import server_message
@@ -23,9 +23,19 @@ TIER_SUFFIX = {
 }
 
 
-def roll_summary(actor: str, character: str | None, label: str | None, notation: str, total: int, tier: str) -> str:
+def roll_summary(
+    actor: str,
+    character: str | None,
+    label: str | None,
+    notation: str,
+    total: int,
+    tier: str,
+    check: dict[str, Any] | None = None,
+) -> str:
     who = character or actor
     what = f" ({label})" if label else ""
+    if check:
+        return f"{who} rolou {notation}{what} = {total}{check_suffix(check)}"
     return f"{who} rolou {notation}{what} = {total}{TIER_SUFFIX.get(Tier(tier), '')}"
 
 
@@ -125,6 +135,7 @@ async def announce_level_up(
     payload = {
         "character": {"id": str(character.id), "name": character.name},
         "level": result["level"],
+        "level_label": result.get("level_label"),
         "hp_gain": result["hp_gain"],
         "attributes": result["attributes"],
         "hp_current": character.hp_current,

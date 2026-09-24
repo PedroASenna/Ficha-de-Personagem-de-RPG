@@ -77,6 +77,7 @@ export default function RootLayout() {
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="character/new" options={{ title: 'Novo personagem' }} />
                     <Stack.Screen name="character/[id]" options={{ title: 'Ficha' }} />
+                    <Stack.Screen name="character/edit" options={{ title: 'Editar ficha' }} />
                     <Stack.Screen name="room/create" options={{ title: 'Criar mesa' }} />
                     <Stack.Screen name="room/[pin]" options={{ title: 'Mesa' }} />
                   </Stack.Protected>

@@ -173,7 +173,7 @@ async def _room_character(session, ctx: RoomContext, character_id: uuid.UUID) ->
 async def _handle_roll(state: AppState, ctx: RoomContext, msg: RollRequestMsg) -> None:
     if not state.limiters.roll.allow(f"roll:{ctx.user_id}"):
         raise RateLimitedError("Calma! Muitas rolagens seguidas.")
-    expression = dice.parse(msg.notation)
+    dice.parse(msg.notation)  # notação inválida vira erro antes de abrir o banco
     async with state.db.sessionmaker() as session:
         character = None
         npc = None
@@ -184,24 +184,24 @@ async def _handle_roll(state: AppState, ctx: RoomContext, msg: RollRequestMsg) -
         elif msg.npc_id:
             npc = await _room_npc(session, ctx, msg.npc_id)
         roller = character.name if character else npc.name if npc else None
-        result = dice.roll(expression)
-        outcome = dice.classify(result, state.registry.outcome_rules(ctx.ruleset_id))
+        pack = state.registry.get(ctx.ruleset_id)
+        roll, outcome, check, total, shown = dice.roll_request(
+            pack.engine if pack else "classic",
+            msg.notation,
+            target=msg.target,
+            wild=msg.wild,
+            rules=state.registry.outcome_rules(ctx.ruleset_id),
+        )
         payload = {
             "request_id": msg.id,
             "label": msg.label,
-            "roll": result.to_dict(),
+            "roll": roll,
             "outcome": outcome.to_dict(),
+            "check": check,
             "actor": {"user_id": str(ctx.user_id), "display_name": ctx.display_name},
             "character": {"id": str(character.id), "name": character.name} if character else None,
             "npc": {"id": str(npc.id), "name": npc.name} if npc else None,
-            "summary": roll_summary(
-                ctx.display_name,
-                roller,
-                msg.label,
-                result.expression.canonical(),
-                result.total,
-                outcome.tier,
-            ),
+            "summary": roll_summary(ctx.display_name, roller, msg.label, shown, total, outcome.tier, check),
         }
         await announce_roll(
             session,

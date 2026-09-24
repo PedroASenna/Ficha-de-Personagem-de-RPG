@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from app.services.dice.notation import DiceExpression, DiceTerm
 
 _system_rng = secrets.SystemRandom()
+# Um dado que explode pode continuar rolando; o limite só evita laço infinito com um RNG viciado.
+MAX_EXPLOSIONS = 20
 
 
 @dataclass(frozen=True)
@@ -18,6 +20,19 @@ class DieResult:
     sides: int
     value: int
     kept: bool
+    # Dados que explodem: cada rolagem (a soma é o value). Um só elemento = não explodiu.
+    rolls: tuple[int, ...] = ()
+
+    @property
+    def first(self) -> int:
+        """Resultado natural do primeiro lançamento (olhos de cobra, críticos)."""
+        return self.rolls[0] if self.rolls else self.value
+
+    def to_dict(self) -> dict:
+        out = {"sides": self.sides, "value": self.value, "kept": self.kept}
+        if len(self.rolls) > 1:
+            out["rolls"] = list(self.rolls)
+        return out
 
 
 @dataclass(frozen=True)
@@ -50,7 +65,7 @@ class RollResult:
                 {
                     "notation": t.term.canonical(),
                     "sign": t.term.sign,
-                    "dice": [{"sides": d.sides, "value": d.value, "kept": d.kept} for d in t.dice],
+                    "dice": [d.to_dict() for d in t.dice],
                     "subtotal": t.subtotal,
                 }
                 for t in self.terms
@@ -69,12 +84,23 @@ def _keep_flags(values: list[int], term: DiceTerm) -> list[bool]:
     return [i in keep for i in range(len(values))]
 
 
+def roll_die(sides: int, explode: bool, rng: random.Random) -> tuple[int, ...]:
+    rolls = [rng.randint(1, sides)]
+    while explode and rolls[-1] == sides and len(rolls) <= MAX_EXPLOSIONS:
+        rolls.append(rng.randint(1, sides))
+    return tuple(rolls)
+
+
 def roll(expression: DiceExpression, rng: random.Random | None = None) -> RollResult:
     rng = rng or _system_rng
     term_results = []
     for term in expression.terms:
-        values = [rng.randint(1, term.sides) for _ in range(term.count)]
+        rolled = [roll_die(term.sides, term.explode, rng) for _ in range(term.count)]
+        values = [sum(r) for r in rolled]
         flags = _keep_flags(values, term)
-        dice = tuple(DieResult(sides=term.sides, value=v, kept=k) for v, k in zip(values, flags, strict=True))
+        dice = tuple(
+            DieResult(sides=term.sides, value=v, kept=k, rolls=r if term.explode else ())
+            for v, k, r in zip(values, flags, rolled, strict=True)
+        )
         term_results.append(TermResult(term=term, dice=dice))
     return RollResult(expression=expression, terms=tuple(term_results))

@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { checkText, diceText } from '../../lib/dice/check';
 import { EffectPreset, PALETTES, Tier } from '../../lib/dice/effects';
 import { NotationError, parse } from '../../lib/dice/notation';
 import { playOutcome, wallTick } from '../../lib/feedback';
@@ -42,7 +43,10 @@ const TIER_LABEL: Record<Tier, string> = {
 type TrayDie = { sides: number; value: number | null; kept: boolean };
 
 type Props = {
+  /** Dados que aparecem na bandeja (no Savage Worlds inclui o Dado Selvagem: "1d8!+1d6!"). */
   notation: string;
+  /** Nome no botão (ex.: "Lutar d8"); sem ele aparece a notação. */
+  label?: string;
   roll: (notation: string) => Promise<RollResponse>;
   d6Variant?: 'pips' | 'numeric';
   height?: number;
@@ -102,7 +106,7 @@ function DieSprite({
   );
 }
 
-export function DiceTray({ notation, roll, d6Variant = 'numeric', height = 300, disabled, onResult }: Props) {
+export function DiceTray({ label, notation, roll, d6Variant = 'numeric', height = 300, disabled, onResult }: Props) {
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const bodies = useSharedValue<Body[]>([]);
@@ -246,7 +250,8 @@ export function DiceTray({ notation, roll, d6Variant = 'numeric', height = 300, 
   const trayStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.get() }] }));
   const outcome = result?.outcome;
   const palette = PALETTES[outcome && phase === 'revealed' ? outcome.effect.palette : 'stone'];
-  const tierLabel = outcome && phase === 'revealed' ? TIER_LABEL[outcome.tier] : '';
+  const tierLabel =
+    outcome && phase === 'revealed' ? (result?.check ? checkText(result.check) : TIER_LABEL[outcome.tier]) : '';
 
   return (
     <View>
@@ -256,11 +261,11 @@ export function DiceTray({ notation, roll, d6Variant = 'numeric', height = 300, 
           style={[styles.tray, { height, borderColor: theme.colors.outline, backgroundColor: theme.colors.elevation.level1 }, trayStyle]}
           accessible
           accessibilityRole="button"
-          accessibilityLabel={`Bandeja de dados. Toque ou arraste para rolar ${notation}.`}
+          accessibilityLabel={`Bandeja de dados. Toque ou arraste para rolar ${label ?? notation}.`}
         >
           {dice.length === 0 ? (
             <Text style={styles.hint} variant="bodyMedium">
-              Arraste ou toque para rolar {notation}
+              Arraste ou toque para rolar {label ?? notation}
             </Text>
           ) : null}
           {dice.map((die, i) => (
@@ -303,10 +308,8 @@ export function DiceTray({ notation, roll, d6Variant = 'numeric', height = 300, 
                 </Text>
               ) : null}
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {result.roll.notation} ·{' '}
-                {result.roll.terms
-                  .map((t) => `[${t.dice.map((d) => (d.kept ? d.value : `(${d.value})`)).join(', ')}]`)
-                  .join(' ')}
+                {label ? `${label} · ` : ''}
+                {result.roll.notation} · {diceText(result.roll)}
                 {result.roll.modifier ? ` ${result.roll.modifier > 0 ? '+' : ''}${result.roll.modifier}` : ''}
               </Text>
             </View>
@@ -319,7 +322,7 @@ export function DiceTray({ notation, roll, d6Variant = 'numeric', height = 300, 
             disabled={disabled || phase === 'rolling'}
             loading={phase === 'rolling'}
           >
-            Rolar {notation}
+            Rolar {label ?? notation}
           </Button>
         )}
       </View>

@@ -23,15 +23,15 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { api } from "../api/client";
-import type { CharacterSheet, Npc, PartyMember, Token } from "../api/types";
+import type { CharacterSheet, EngineSheet, Npc, PartyMember, SheetCheck, Token } from "../api/types";
 import { toast } from "../toasts";
 import { deleteNpc, removeToken, updateToken } from "./actions";
-import { LevelUpDialog } from "./LevelUpDialog";
+import { ExperienceDialog, LevelUpDialog } from "./LevelUpDialog";
 import { NpcDialog } from "./NpcDialog";
 import { RotationControl } from "./RotationControl";
 import { ObjectPanel, PiecesPanel } from "./SelectionPanels";
 import { type RulesetAttribute, useRuleset } from "./ruleset";
-import { abilityModifier, checkNotation, CONDITION_COLOR, formatModifier, hpColor, hpRatio } from "./rules";
+import { attributeCheck, attributeDisplay, CONDITION_COLOR, type Engine, hpColor, hpRatio } from "./rules";
 import { type ClientMessage, newRequestId, useTable } from "./store";
 
 type Target = { character_id: string } | { npc_id: string };
@@ -111,10 +111,12 @@ function HpControls({ target }: { target: Target }) {
 function AttributeGrid({
   attributes,
   values,
+  engine,
   onRoll,
 }: {
   attributes: RulesetAttribute[];
   values: Record<string, number>;
+  engine?: Engine;
   onRoll: (attr: RulesetAttribute, score: number) => void;
 }) {
   const known =
@@ -125,8 +127,13 @@ function AttributeGrid({
     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
       {known.map((attr) => {
         const score = values[attr.key] ?? 10;
+        const shown = attributeDisplay(engine, score);
+        const check = attributeCheck(engine, score);
         return (
-          <Tooltip key={attr.key} title={`Rolar ${attr.name} (${checkNotation(score)})`}>
+          <Tooltip
+            key={attr.key}
+            title={`Rolar ${attr.name} (${check.notation}${check.target !== undefined ? ` contra ${check.target}` : ""})`}
+          >
             <ButtonBase
               onClick={() => onRoll(attr, score)}
               sx={{
@@ -143,10 +150,10 @@ function AttributeGrid({
                 {attr.abbr}
               </Typography>
               <Typography variant="h6" sx={{ lineHeight: 1.1 }}>
-                {formatModifier(abilityModifier(score))}
+                {shown.main}
               </Typography>
               <Typography variant="caption" color="text.disabled">
-                {score}
+                {shown.sub || "\u00a0"}
               </Typography>
             </ButtonBase>
           </Tooltip>
@@ -156,16 +163,21 @@ function AttributeGrid({
   );
 }
 
-function RollBox({ target, secretByDefault }: { target: Target; secretByDefault: boolean }) {
-  const [notation, setNotation] = useState("1d20");
+function RollBox({ target, secretByDefault, engine }: { target: Target; secretByDefault: boolean; engine?: Engine }) {
+  const [notation, setNotation] = useState(engine === "gurps" ? "3d6" : engine === "savage" ? "1d6!" : "1d20");
   const [secret, setSecret] = useState(secretByDefault);
+  const [goal, setGoal] = useState("");
+  const [wild, setWild] = useState(false);
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    const value = Number(goal);
     sendOrWarn({
       type: "roll.request",
       id: newRequestId(),
       notation: notation.trim(),
       visibility: secret ? "master_only" : "public",
+      ...(goal.trim() && Number.isFinite(value) ? { target: value } : {}),
+      ...(engine === "savage" && wild ? { wild: true } : {}),
       ...target,
     });
   };
@@ -176,9 +188,27 @@ function RollBox({ target, secretByDefault }: { target: Target; secretByDefault:
         label="Rolar"
         value={notation}
         onChange={(e) => setNotation(e.target.value)}
-        placeholder="1d20+4, 2d6+3…"
+        placeholder={engine === "savage" ? "1d8!, 2d6!+1…" : engine === "gurps" ? "3d6, 2d+1…" : "1d20+4, 2d6+3…"}
         sx={{ flex: 1 }}
       />
+      {engine && engine !== "classic" && (
+        <TextField
+          size="small"
+          label={engine === "gurps" ? "NH" : "Dif."}
+          value={goal}
+          onChange={(e) => setGoal(e.target.value.replace(/[^\d-]/g, "").slice(0, 4))}
+          sx={{ width: 76 }}
+        />
+      )}
+      {engine === "savage" && (
+        <Tooltip title="Dado Selvagem (Cartas Selvagens)">
+          <FormControlLabel
+            sx={{ mr: 0 }}
+            control={<Switch size="small" checked={wild} onChange={(e) => setWild(e.target.checked)} />}
+            label="d6"
+          />
+        </Tooltip>
+      )}
       <Tooltip title={secret ? "Só você vê o resultado" : "Todos veem o resultado"}>
         <FormControlLabel
           sx={{ mr: 0 }}
@@ -190,6 +220,87 @@ function RollBox({ target, secretByDefault }: { target: Target; secretByDefault:
         Rolar
       </Button>
     </Stack>
+  );
+}
+
+/** GURPS e Savage Worlds: derivadas, testes prontos (clique para rolar), vantagens e avisos. */
+function EngineSections({
+  sheet,
+  onRoll,
+  skipKeys,
+}: {
+  sheet: EngineSheet;
+  onRoll: (check: SheetCheck) => void;
+  skipKeys: string[];
+}) {
+  const groups = new Map<string, SheetCheck[]>();
+  for (const check of sheet.checks) {
+    if (skipKeys.includes(check.key)) continue;
+    groups.set(check.group, [...(groups.get(check.group) ?? []), check]);
+  }
+  const progress =
+    sheet.engine === "gurps" && sheet.points
+      ? `${sheet.points.total} pontos · ${sheet.points.unspent} livres · desvantagens ${sheet.points.disadvantages} (limite ${sheet.points.disadvantage_limit})`
+      : sheet.rank
+        ? `${sheet.rank.name} · ${sheet.xp ?? 0} XP · ${sheet.advances?.available ?? 0} Progresso(s) por fazer`
+        : "";
+  return (
+    <>
+      <Section title="Estatísticas">
+        <Stack direction="row" useFlexGap spacing={0.5} sx={{ flexWrap: "wrap" }}>
+          {sheet.derived.map((d) => (
+            <Chip
+              key={d.key}
+              size="small"
+              variant="outlined"
+              label={`${d.label} ${d.current !== undefined ? `${d.current}/` : ""}${d.value}`}
+            />
+          ))}
+        </Stack>
+        {progress && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+            {progress}
+          </Typography>
+        )}
+      </Section>
+      {[...groups.entries()].map(([group, checks]) => (
+        <Section key={group} title={`${group} (clique para rolar)`}>
+          <Stack direction="row" useFlexGap spacing={0.5} sx={{ flexWrap: "wrap" }}>
+            {checks.map((c) => (
+              <Chip
+                key={`${c.key}-${c.label}`}
+                size="small"
+                icon={<CasinoIcon />}
+                label={`${c.label} ${c.target !== undefined && !c.wild ? c.target : c.notation.replace(/^1/, "").replace("!", "")}`}
+                onClick={() => onRoll(c)}
+              />
+            ))}
+          </Stack>
+        </Section>
+      ))}
+      {sheet.traits.length > 0 && (
+        <Section title={sheet.engine === "gurps" ? "Vantagens e desvantagens" : "Vantagens, Complicações e Poderes"}>
+          {sheet.traits.map((t, i) => (
+            <Typography key={`${t.key}-${i}`} variant="body2" color={t.unmet?.length ? "warning.main" : undefined}>
+              {t.name}
+              {t.note ? ` (${t.note})` : ""}
+              {t.cost !== undefined ? ` · ${t.cost > 0 ? "+" : ""}${t.cost}` : ""}
+              {t.severity ? ` · ${t.severity === "major" ? "Maior" : "Menor"}` : ""}
+              {t.page ? ` · pág. ${t.page}` : ""}
+            </Typography>
+          ))}
+        </Section>
+      )}
+      {sheet.warnings.length > 0 && (
+        <Section title="Avisos">
+          {sheet.warnings.map((w) => (
+            <Typography key={w} variant="caption" color="warning.main" sx={{ display: "block" }}>
+              {w}
+            </Typography>
+          ))}
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -273,15 +384,21 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
   });
   const data = sheet.data;
   const [leveling, setLeveling] = useState(false);
-  const roll = (attr: RulesetAttribute, score: number) =>
+  const engine = ruleset.data?.engine;
+  const rollCheck = (check: { notation: string; target?: number; wild?: boolean }, label: string) =>
     sendOrWarn({
       type: "roll.request",
       id: newRequestId(),
-      notation: checkNotation(score, ruleset.data?.dice.default_check),
-      label: attr.name,
+      notation: check.notation,
+      ...(check.target !== undefined ? { target: check.target } : {}),
+      ...(check.wild ? { wild: true } : {}),
+      label,
       visibility: "public",
       character_id: member.id,
     });
+  // Personagens de jogador são Cartas Selvagens no Savage Worlds: rolam o Dado Selvagem.
+  const roll = (attr: RulesetAttribute, score: number) =>
+    rollCheck(attributeCheck(engine, score, ruleset.data?.dice.default_check, true), attr.name);
 
   return (
     <Box>
@@ -297,7 +414,9 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
             {member.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {[member.ancestry_name, member.class_name, `Nível ${member.level}`].filter(Boolean).join(" · ")}
+            {[member.ancestry_name, member.class_name, member.level_label ?? `Nível ${member.level}`]
+              .filter(Boolean)
+              .join(" · ")}
           </Typography>
           {data?.background_name && (
             <Typography variant="caption" color="text.disabled">
@@ -306,7 +425,9 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
           )}
         </Box>
         {data?.status === "complete" && ruleset.data && (
-          <Tooltip title="Subir de nível">
+          <Tooltip
+            title={engine === "gurps" ? "Dar pontos de personagem" : engine === "savage" ? "Dar XP" : "Subir de nível"}
+          >
             <Button
               size="small"
               variant="outlined"
@@ -314,12 +435,15 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
               onClick={() => setLeveling(true)}
               sx={{ ml: "auto", flexShrink: 0 }}
             >
-              Nível
+              {engine === "gurps" ? "Pontos" : engine === "savage" ? "XP" : "Nível"}
             </Button>
           </Tooltip>
         )}
       </Stack>
-      {leveling && data && ruleset.data && room && (
+      {leveling && data && ruleset.data && room && (engine === "gurps" || engine === "savage") && (
+        <ExperienceDialog roomId={room.id} sheet={data} engine={engine} onClose={() => setLeveling(false)} />
+      )}
+      {leveling && data && ruleset.data && room && (!engine || engine === "classic") && (
         <LevelUpDialog roomId={room.id} sheet={data} pack={ruleset.data} onClose={() => setLeveling(false)} />
       )}
       <Box sx={{ mt: 2 }}>
@@ -329,8 +453,20 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
       {data && (
         <>
           <Section title="Atributos (clique para rolar)">
-            <AttributeGrid attributes={ruleset.data?.attributes ?? []} values={data.attributes} onRoll={roll} />
+            <AttributeGrid
+              attributes={ruleset.data?.attributes ?? []}
+              values={data.attributes}
+              engine={engine}
+              onRoll={roll}
+            />
           </Section>
+          {data.sheet && (
+            <EngineSections
+              sheet={data.sheet}
+              skipKeys={(ruleset.data?.attributes ?? []).map((a) => a.key)}
+              onRoll={(c) => rollCheck(c, c.label)}
+            />
+          )}
           {data.conditions.length > 0 && (
             <Section title="Condições">
               <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
@@ -388,7 +524,7 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
         </>
       )}
       <Section title="Rolar pelo personagem">
-        <RollBox target={{ character_id: member.id }} secretByDefault={false} />
+        <RollBox key={engine} target={{ character_id: member.id }} secretByDefault={false} engine={engine} />
       </Section>
       {token && <TokenControls token={token} />}
     </Box>
@@ -399,15 +535,22 @@ function NpcDetail({ npc, token }: { npc: Npc; token: Token | null }) {
   const room = useTable((s) => s.room);
   const ruleset = useRuleset(room?.ruleset_id);
   const [editing, setEditing] = useState(false);
-  const roll = (attr: RulesetAttribute, score: number) =>
+  const engine = ruleset.data?.engine;
+  // Savage Worlds: capangas (Extras) rolam só o dado; chefes (Cartas Selvagens) também o Dado Selvagem.
+  const [wildCard, setWildCard] = useState(false);
+  const roll = (attr: RulesetAttribute, score: number) => {
+    const check = attributeCheck(engine, score, ruleset.data?.dice.default_check, wildCard);
     sendOrWarn({
       type: "roll.request",
       id: newRequestId(),
-      notation: checkNotation(score, ruleset.data?.dice.default_check),
+      notation: check.notation,
+      ...(check.target !== undefined ? { target: check.target } : {}),
+      ...(check.wild ? { wild: true } : {}),
       label: attr.name,
       visibility: "master_only",
       npc_id: npc.id,
     });
+  };
 
   return (
     <Box>
@@ -451,11 +594,22 @@ function NpcDetail({ npc, token }: { npc: Npc; token: Token | null }) {
       </Box>
       {Object.keys(npc.attributes).length > 0 && (
         <Section title="Atributos (rolagem secreta)">
-          <AttributeGrid attributes={ruleset.data?.attributes ?? []} values={npc.attributes} onRoll={roll} />
+          <AttributeGrid
+            attributes={ruleset.data?.attributes ?? []}
+            values={npc.attributes}
+            engine={engine}
+            onRoll={roll}
+          />
+          {engine === "savage" && (
+            <FormControlLabel
+              control={<Switch size="small" checked={wildCard} onChange={(e) => setWildCard(e.target.checked)} />}
+              label="Carta Selvagem (rola o Dado Selvagem)"
+            />
+          )}
         </Section>
       )}
       <Section title="Ataque / rolagem">
-        <RollBox target={{ npc_id: npc.id }} secretByDefault />
+        <RollBox key={engine} target={{ npc_id: npc.id }} secretByDefault engine={engine} />
       </Section>
       {npc.notes && (
         <Section title="Anotações">

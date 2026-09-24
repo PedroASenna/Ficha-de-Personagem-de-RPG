@@ -18,6 +18,8 @@ export type DiceTerm = {
   sign: 1 | -1;
   keep?: 'kh' | 'kl';
   keepN?: number;
+  /** Dado que explode (Savage Worlds): no máximo rola de novo e soma. */
+  explode?: boolean;
 };
 
 export type DiceExpression = {
@@ -25,7 +27,7 @@ export type DiceExpression = {
   modifier: number;
 };
 
-const TERM = /(?:(\d*)d(\d+|%)(?:(kh|kl)(\d+))?|(\d+))/y;
+const TERM = /(?:(\d*)d(\d+|%)(!)?(?:(kh|kl)(\d+))?|(\d+))/y;
 
 export function isAllowedSides(n: number): n is DieSides {
   return (ALLOWED_SIDES as readonly number[]).includes(n);
@@ -59,7 +61,7 @@ export function parse(notation: string): DiceExpression {
     pos = TERM.lastIndex;
     first = false;
 
-    const [, countRaw, sidesRaw, keep, keepRaw, constant] = match;
+    const [, countRaw, sidesRaw, bang, keep, keepRaw, constant] = match;
     if (constant !== undefined) {
       modifier += sign * Number(constant);
       continue;
@@ -72,7 +74,9 @@ export function parse(notation: string): DiceExpression {
     if (keepN !== undefined && (keepN < 1 || keepN > count)) {
       throw new NotationError(`Não dá para manter ${keepN} de ${count} dados.`);
     }
-    terms.push({ count, sides, sign, keep: keep as DiceTerm['keep'], keepN });
+    const explode = bang === '!';
+    if (explode && sides < 3) throw new NotationError('Só dados de 3 lados ou mais podem explodir.');
+    terms.push({ count, sides, sign, keep: keep as DiceTerm['keep'], keepN, ...(explode ? { explode } : {}) });
   }
 
   if (terms.length === 0) throw new NotationError('A expressão precisa ter pelo menos um dado.');
@@ -84,7 +88,7 @@ export function parse(notation: string): DiceExpression {
 }
 
 export function termToString(term: DiceTerm): string {
-  return `${term.count}d${term.sides}${term.keep ? `${term.keep}${term.keepN}` : ''}`;
+  return `${term.count}d${term.sides}${term.explode ? '!' : ''}${term.keep ? `${term.keep}${term.keepN}` : ''}`;
 }
 
 export function canonical(expr: DiceExpression): string {
