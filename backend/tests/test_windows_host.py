@@ -38,7 +38,7 @@ def test_regra_do_firewall_so_para_a_rede_local():
 def test_url_do_sqlite_com_barras_normais(tmp_path):
     from app.core.config import Settings
 
-    url = Settings(data_dir=str(tmp_path / "com espaço")).sqlalchemy_url
+    url = Settings(data_dir=str(tmp_path / "com espaço"), database_url=None).sqlalchemy_url
     assert url.startswith("sqlite+aiosqlite:///") and "\\" not in url and url.endswith("com espaço/rpgplay.db")
 
 
