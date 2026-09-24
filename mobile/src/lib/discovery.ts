@@ -110,6 +110,18 @@ export async function scanSubnet(ip: string, options: ScanOptions = {}): Promise
   return [...found.values()];
 }
 
+/**
+ * O servidor não respondeu: o que testar, na ordem. Na prática quase sempre é o firewall do computador do
+ * servidor (ufw no Debian/Ubuntu), que o comando `rpgplay-server diagnostico` aponta e resolve.
+ */
+export function unreachableHelp(server: string): string {
+  return (
+    `O servidor ${server} não respondeu. Teste abrindo ${server}/api/v1/discovery no navegador do celular. ` +
+    'Se não abrir: confira se o celular está no mesmo Wi-Fi (sem VPN) e, no computador do servidor, rode ' +
+    '"sudo rpgplay-server diagnostico" (quase sempre é o firewall).'
+  );
+}
+
 /** Link do QR code do painel do Mestre: rpgplay://join?server=http%3A%2F%2F192.168.0.20%3A8080&pin=ABC123 */
 export function parseJoinLink(link: string): { server: string; pin: string | null } | null {
   const match = /^rpgplay:\/\/join\/?\?(.*)$/i.exec(link.trim());

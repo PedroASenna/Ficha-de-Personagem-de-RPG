@@ -10,8 +10,8 @@ name: Release
 # APK assinado: cadastre em Settings → Secrets and variables → Actions
 #   ANDROID_KEYSTORE_BASE64  (base64 do arquivo .jks)   ANDROID_KEYSTORE_PASSWORD
 #   ANDROID_KEY_ALIAS                                    ANDROID_KEY_PASSWORD
-# Sem esses segredos o APK sai assinado com a chave de debug (instala, mas cada build terá outra chave e o
-# Android vai pedir para desinstalar antes de atualizar). Veja docs/INSTALACAO.md → "Gerar os instaladores".
+# Sem esses segredos o APK sai assinado com a chave de debug do modelo do React Native (a mesma em todo build,
+# então as atualizações instalam por cima). Ela é pública: para distribuir além do grupo, use uma chave própria.
 
 on:
   push:
@@ -179,7 +179,7 @@ jobs:
             "$APKSIGNER" verify --print-certs "$OUT" | head -n 3
             rm -f "$RUNNER_TEMP/rpgplay.jks"
           else
-            echo "::warning::Sem ANDROID_KEYSTORE_BASE64: APK assinado com a chave de debug."
+            echo "::warning::Sem ANDROID_KEYSTORE_BASE64: APK assinado com a chave de debug (pública) do modelo do React Native."
             cp "$APK" "$OUT"
           fi
       - uses: actions/upload-artifact@v4

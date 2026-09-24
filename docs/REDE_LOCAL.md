@@ -11,6 +11,8 @@ Como os aparelhos acham o servidor da casa e o que protege a mesa numa rede sem 
 
 Ambas configuráveis: `RPG_PORT` e `RPG_DISCOVERY_PORT` (e `RPG_DISCOVERY_ENABLED=false` desliga o UDP).
 
+Com firewall ativo no servidor, `sudo rpgplay-server liberar-firewall` libera as duas portas só para a sub-rede de casa (detectada por `ip -4 addr`), no ufw ou no firewalld. `sudo rpgplay-server diagnostico` confere servidor, endereço e firewall e diz o próximo passo.
+
 ## Descoberta
 
 Três caminhos, do mais automático ao mais manual:

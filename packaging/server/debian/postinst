@@ -29,10 +29,17 @@ case "$1" in
       echo "  Celulares (app RPG Play):                  http://$ip:$PORT"
     done
     echo "  Configuração: /etc/rpgplay/server.env   Comandos: sudo rpgplay-server --help"
+    FIREWALL=""
     if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+      FIREWALL="ufw"
+    elif command -v firewall-cmd >/dev/null 2>&1 && [ "$(firewall-cmd --state 2>/dev/null)" = "running" ]; then
+      FIREWALL="firewalld"
+    fi
+    if [ -n "$FIREWALL" ]; then
       echo ""
-      echo "  O firewall (ufw) está ativo. Libere as portas para a rede de casa:"
-      echo "    sudo ufw allow $PORT/tcp && sudo ufw allow 47777/udp"
+      echo "  ATENÇÃO: o firewall ($FIREWALL) está ativo e pode impedir os celulares de conectar."
+      echo "  Para liberar as portas só para a rede de casa:  sudo rpgplay-server liberar-firewall"
+      echo "  Para conferir tudo (servidor, endereço, firewall): sudo rpgplay-server diagnostico"
     fi
     echo ""
     ;;

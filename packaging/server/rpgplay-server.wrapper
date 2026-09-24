@@ -2,6 +2,8 @@
 # rpgplay-server: comandos do servidor RPG Play (configuração em /etc/rpgplay/server.env).
 # Os arquivos do servidor pertencem ao usuário "rpgplay"; com sudo, os comandos rodam como ele.
 #   sudo rpgplay-server info                      endereços para conectar
+#   sudo rpgplay-server diagnostico               por que o celular não conecta? (firewall, rede)
+#   sudo rpgplay-server liberar-firewall          libera as portas no ufw/firewalld só para a rede de casa
 #   sudo rpgplay-server reset-password <usuário>  nova senha para quem esqueceu
 #   sudo rpgplay-server make-admin <usuário>
 #   sudo rpgplay-server backup <arquivo.tar.gz>
@@ -45,6 +47,10 @@ case "${1:-}" in
     as_service_user restore - < "$source" || status=$?
     if [ "$was_running" = 1 ]; then systemctl start rpgplay-server; fi
     exit "$status"
+    ;;
+  diagnostico|liberar-firewall)
+    # Consultam/alteram o firewall (precisam de root) e não escrevem no diretório de dados.
+    exec "$BIN" "$@"
     ;;
   *)
     exec runuser -u rpgplay -- "$BIN" "$@"

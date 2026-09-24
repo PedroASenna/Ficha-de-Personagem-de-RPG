@@ -7,7 +7,7 @@ import { Button, Card, HelperText, List, ProgressBar, Text, TextInput, useTheme 
 
 import { Screen } from '../components/common/Screen';
 import { chooseServer } from '../lib/connect';
-import { normalizeServerUrl, probe, scanSubnet, type ServerInfo } from '../lib/discovery';
+import { normalizeServerUrl, probe, scanSubnet, type ServerInfo, unreachableHelp } from '../lib/discovery';
 
 export default function ServerScreen() {
   const theme = useTheme();
@@ -83,7 +83,7 @@ export default function ServerScreen() {
     const server = await probe(url, 3000);
     setBusy(false);
     if (server) await pick(server);
-    else setError(`Nenhum servidor RPG Play respondeu em ${url}.`);
+    else setError(unreachableHelp(url));
   };
 
   return (
@@ -149,7 +149,8 @@ export default function ServerScreen() {
 
       <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
         Não achou? O celular e o servidor precisam estar no mesmo Wi-Fi, e o roteador não pode isolar os aparelhos
-        (“isolamento de clientes” ou rede de convidados).
+        (“isolamento de clientes” ou rede de convidados). No computador do servidor, “sudo rpgplay-server
+        diagnostico” mostra o que está bloqueando (quase sempre é o firewall).
       </Text>
     </Screen>
   );

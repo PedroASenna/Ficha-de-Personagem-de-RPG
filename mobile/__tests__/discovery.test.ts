@@ -1,4 +1,4 @@
-import { normalizeServerUrl, parseJoinLink, probe, scanSubnet, subnetHosts } from '../src/lib/discovery';
+import { normalizeServerUrl, parseJoinLink, probe, scanSubnet, subnetHosts, unreachableHelp } from '../src/lib/discovery';
 
 describe('endereço do servidor', () => {
   it('normaliza o que o jogador digita', () => {
@@ -85,5 +85,13 @@ describe('varredura da rede', () => {
     };
     await scanSubnet('10.0.0.1', { fetchImpl, signal, concurrency: 1 });
     expect(calls).toBe(10);
+  });
+});
+
+describe('ajuda quando o servidor não responde', () => {
+  it('manda testar no navegador e rodar o diagnóstico no servidor', () => {
+    const text = unreachableHelp('http://192.168.0.14:8080');
+    expect(text).toContain('http://192.168.0.14:8080/api/v1/discovery');
+    expect(text).toContain('sudo rpgplay-server diagnostico');
   });
 });

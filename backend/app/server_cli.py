@@ -21,6 +21,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from app.core import netcheck
 from app.core.config import Settings, ensure_runtime_secrets, get_settings
 from app.core.discovery import lan_addresses
 
@@ -229,6 +230,112 @@ def cmd_info(args: argparse.Namespace) -> int:
     return 0
 
 
+def _home_network() -> tuple[Settings, list[tuple[int, str]], list[str], list]:
+    """Configuração, portas a liberar e as redes da casa (sem criar arquivos: roda como root)."""
+    settings = get_settings()
+    checks = [(settings.port, "tcp")]
+    if settings.discovery_enabled:
+        checks.append((settings.discovery_port, "udp"))
+    addresses = lan_addresses()
+    code, ip_json = netcheck.run_command(["ip", "-j", "-4", "addr"])
+    networks = netcheck.home_networks(addresses, ip_json if code == 0 else None)
+    return settings, checks, addresses, networks
+
+
+def _is_root() -> bool:
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+def cmd_diagnostico(args: argparse.Namespace) -> int:
+    """Por que o celular não conecta? Confere servidor, endereço e firewall e diz o que fazer."""
+    settings, checks, addresses, networks = _home_network()
+    port = settings.port
+    problems = 0
+    print("Diagnóstico do RPG Play")
+
+    local = netcheck.probe(f"http://127.0.0.1:{port}")
+    if local:
+        print(f"  ✔ Servidor respondendo na porta {port} ({local.get('name')}, v{local.get('version')})")
+    else:
+        problems += 1
+        print(f"  ✘ Nada respondendo em http://127.0.0.1:{port}: o servidor está parado.")
+        print("      → sudo systemctl restart rpgplay-server   (erros: journalctl -u rpgplay-server -n 50)")
+
+    if not addresses:
+        problems += 1
+        print("  ✘ Este computador não está numa rede local (Wi-Fi ou cabo desconectado?).")
+    for address, network in zip(addresses, networks, strict=False):
+        print(f"  ✔ Endereço para os celulares: http://{address}:{port}  (rede {network})")
+
+    if not _is_root():
+        print("  ! Rode com sudo para conferir o firewall: sudo rpgplay-server diagnostico")
+    else:
+        report = netcheck.detect_firewall(netcheck.run_command, checks)
+        if not report.active:
+            print("  ✔ Nenhum firewall (ufw ou firewalld) ativo")
+        else:
+            blocked = False
+            for check_port, proto in checks:
+                label = "celulares e painel" if proto == "tcp" else "descoberta automática"
+                for network in networks:
+                    if not report.allows(check_port, proto, network):
+                        blocked = True
+                        print(
+                            f"  ✘ Firewall {report.name}: porta {check_port}/{proto} ({label}) bloqueada para {network}"
+                        )
+                    elif report.state(check_port, proto).open_to_anyone and not report.default_allows_incoming:
+                        print(
+                            f"  ! Firewall {report.name}: porta {check_port}/{proto} liberada para qualquer origem."
+                            " Com IPv6 público, isso pode expor o servidor na internet; prefira só a rede de casa."
+                        )
+                    else:
+                        print(
+                            f"  ✔ Firewall {report.name}: porta {check_port}/{proto} ({label}) liberada para {network}"
+                        )
+            if blocked:
+                problems += 1
+                print("      → sudo rpgplay-server liberar-firewall   (libera só para a rede de casa)")
+
+    if addresses:
+        print(f"\nTeste no celular (no mesmo Wi-Fi): abra http://{addresses[0]}:{port}/api/v1/discovery no navegador.")
+    if problems == 0:
+        print(
+            "Deste lado está tudo certo. Se o celular não abrir o endereço: confira se ele está no mesmo Wi-Fi"
+            " (não na rede de convidados), sem VPN e sem dados móveis, e se o roteador não isola os aparelhos"
+            ' ("isolamento de clientes" / "AP isolation").'
+        )
+    return 0 if problems == 0 else 1
+
+
+def cmd_liberar_firewall(args: argparse.Namespace) -> int:
+    """Libera as portas do RPG Play no ufw ou firewalld, só para a rede de casa."""
+    if not _is_root():
+        print("Rode com sudo: sudo rpgplay-server liberar-firewall", file=sys.stderr)
+        return 1
+    _, checks, _, networks = _home_network()
+    if not networks:
+        print("Este computador não está numa rede local: não há rede para liberar.", file=sys.stderr)
+        return 1
+    report = netcheck.detect_firewall(netcheck.run_command, checks)
+    if not report.active:
+        print("Nenhum firewall ativo (ufw ou firewalld): não há o que liberar.")
+        return 0
+    commands = netcheck.firewall_commands(report, networks, checks)
+    if not commands:
+        print(f"As portas já estão liberadas no {report.name} para a rede de casa.")
+        return 0
+    for command in commands:
+        print(f"  $ {netcheck.shell_join(command)}")
+        code, output = netcheck.run_command(command)
+        if code != 0:
+            print(output.strip(), file=sys.stderr)
+            print("Não consegui liberar. Rode o comando acima à mão para ver o erro.", file=sys.stderr)
+            return 1
+    nets = ", ".join(str(n) for n in networks)
+    print(f"Pronto: portas liberadas no {report.name} só para a rede de casa ({nets}).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rpgplay-server", description="Servidor RPG Play da casa")
     sub = parser.add_subparsers(dest="command")
@@ -245,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     restore.add_argument("input", help='arquivo .tar.gz ("-" = entrada padrão)')
     sub.add_parser("purge", help="aplica a retenção de dados")
     sub.add_parser("info", help="mostra os endereços para conectar")
+    sub.add_parser("diagnostico", help="por que o celular não conecta? (servidor, endereço, firewall)")
+    sub.add_parser("liberar-firewall", help="libera as portas no ufw/firewalld só para a rede de casa")
     args = parser.parse_args(argv)
     handlers = {
         "serve": cmd_serve,
@@ -254,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
         "restore": cmd_restore,
         "purge": cmd_purge,
         "info": cmd_info,
+        "diagnostico": cmd_diagnostico,
+        "liberar-firewall": cmd_liberar_firewall,
         None: cmd_serve,
     }
     if args.command is None:

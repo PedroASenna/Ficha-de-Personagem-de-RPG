@@ -65,7 +65,7 @@ async function search() {
   render(servers, last && last.serverId);
   statusLine.textContent =
     servers.length === 0
-      ? "Nenhum servidor encontrado. Confira se ele está ligado e na mesma rede, ou digite o endereço abaixo."
+      ? "Nenhum servidor encontrado. Confira se ele está ligado e na mesma rede, ou digite o endereço abaixo. Se não conectar, rode sudo rpgplay-server diagnostico no computador do servidor."
       : servers.length === 1
         ? "1 servidor encontrado."
         : `${servers.length} servidores encontrados.`;

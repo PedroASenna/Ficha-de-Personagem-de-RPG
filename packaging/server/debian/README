@@ -13,9 +13,10 @@ Celulares: app RPG Play no mesmo Wi-Fi (acha o servidor sozinho ou pelo QR code 
 Configuração: /etc/rpgplay/server.env (depois: sudo systemctl restart rpgplay-server)
 Dados: /var/lib/rpgplay
 
+Celular não conecta:  sudo rpgplay-server diagnostico   (e sudo rpgplay-server liberar-firewall)
 Esqueceram a senha:   sudo rpgplay-server reset-password <usuário>
 Backup:               sudo rpgplay-server backup ~/rpgplay-backup.tar.gz
 Restaurar backup:     sudo rpgplay-server restore ~/rpgplay-backup.tar.gz
 
-Firewall (se estiver ativo): libere 8080/tcp e 47777/udp para a rede de casa.
+Firewall (se estiver ativo): sudo rpgplay-server liberar-firewall (libera 8080/tcp e 47777/udp só para a rede de casa).
 Nunca exponha a porta 8080 para a internet (sem HTTPS, o servidor é feito para a rede local).

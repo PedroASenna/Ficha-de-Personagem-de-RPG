@@ -77,6 +77,11 @@ function ConnectContent({ pin }: { pin: string }) {
           Os celulares precisam estar no mesmo Wi-Fi do servidor. Se o app não achar, confira se o roteador não isola os
           aparelhos (“isolamento de clientes” / rede de convidados).
         </Typography>
+        <Alert severity="info" variant="outlined">
+          O celular não conecta? Quase sempre é o firewall do computador do servidor. Nele, rode{" "}
+          <code>sudo rpgplay-server diagnostico</code> para ver o que está bloqueando e{" "}
+          <code>sudo rpgplay-server liberar-firewall</code> para liberar só para a rede de casa.
+        </Alert>
       </Stack>
     </Stack>
   );

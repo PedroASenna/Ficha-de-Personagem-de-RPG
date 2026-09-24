@@ -60,15 +60,33 @@ No roteador, procure **"Reserva de DHCP"**, "IP fixo" ou "Endereço reservado" e
 
 ### Firewall
 
-Se o servidor usa firewall (o `ufw`, por exemplo), libere as duas portas só para a rede de casa:
+Muitos Linux vêm com firewall ligado (o Debian e o Ubuntu costumam usar o `ufw`; o Fedora e o openSUSE, o `firewalld`). Com ele ativo, **os celulares não conseguem conectar** até você liberar as portas. O instalador avisa, e um comando resolve:
 
 ```bash
-sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp
-sudo ufw allow from 192.168.0.0/16 to any port 47777 proto udp
+sudo rpgplay-server liberar-firewall
 ```
+
+Ele detecta o ufw ou o firewalld e libera as duas portas **só para a rede de casa** (ex.: `192.168.0.0/24`). Nunca libera para "qualquer origem": muitos computadores têm IPv6 público, e aí a porta ficaria aberta para a internet.
 
 - **8080/TCP**: app dos celulares e painel do Mestre.
 - **47777/UDP**: descoberta automática (os aparelhos perguntam "tem servidor RPG Play aí?" e o servidor responde).
+
+Para conferir tudo de uma vez (servidor rodando, endereço para os celulares, firewall):
+
+```bash
+sudo rpgplay-server diagnostico
+```
+
+Se preferir liberar à mão:
+
+- **ufw:**
+  ```bash
+  sudo ufw allow from 192.168.0.0/24 to any port 8080 proto tcp
+  sudo ufw allow from 192.168.0.0/24 to any port 47777 proto udp
+  ```
+- **firewalld:** use `firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.0.0/24" port port="8080" protocol="tcp" accept'`, repita com `47777`/`udp` e rode `firewall-cmd --reload`.
+
+Troque `192.168.0.0/24` pela rede da sua casa, que o `diagnostico` mostra.
 
 > **Não abra a porta 8080 no roteador para a internet.** O servidor foi feito para a rede de casa e fala HTTP sem criptografia.
 
@@ -163,6 +181,7 @@ Depois, cada jogador cria a própria conta (usuário e senha), cria o personagem
 
 | Tarefa | Comando |
 |---|---|
+| O celular não conecta | `sudo rpgplay-server diagnostico` mostra o que está errado; `sudo rpgplay-server liberar-firewall` resolve o caso mais comum (firewall) |
 | Alguém esqueceu a senha | `sudo rpgplay-server reset-password <usuário>` (gera uma senha nova) ou pelo painel do admin |
 | Tornar alguém administrador | `sudo rpgplay-server make-admin <usuário>` |
 | Backup (banco + mapas + retratos) | `sudo rpgplay-server backup ~/rpgplay-backup.tar.gz` |
@@ -178,10 +197,10 @@ Dica: guarde o backup fora do servidor (pendrive ou outro PC) de vez em quando.
 
 | Sintoma | O que fazer |
 |---|---|
-| O app ou o programa do PC não acha o servidor | Confira se todos estão no **mesmo Wi-Fi**. Desligue **VPN** e "Wi-Fi privado"/"endereço aleatório" que bloqueiem a rede local. Veja se o roteador **não isola os aparelhos** ("isolamento de clientes", "AP isolation" ou rede de convidados). Se não der, digite o IP do servidor à mão. |
+| O app ou o programa do PC não acha o servidor | **Primeiro teste:** abra `http://IP-DO-SERVIDOR:8080/api/v1/discovery` no navegador do celular. Se não abrir, no servidor rode `sudo rpgplay-server diagnostico`: quase sempre é o **firewall**, e `sudo rpgplay-server liberar-firewall` resolve. Depois, confira se todos estão no **mesmo Wi-Fi**. Desligue **VPN** e "Wi-Fi privado"/"endereço aleatório" que bloqueiem a rede local. Veja se o roteador **não isola os aparelhos** ("isolamento de clientes", "AP isolation" ou rede de convidados). Se não der, digite o IP do servidor à mão. |
 | Achava e parou de achar | O IP do servidor mudou: faça a reserva de DHCP (seção 1) e escolha o servidor de novo |
 | "Sem conexão com o servidor" | Servidor desligado ou serviço parado: `sudo systemctl restart rpgplay-server` |
-| Firewall do servidor bloqueando | Libere 8080/TCP e 47777/UDP (seção 1) |
+| Firewall do servidor bloqueando (ufw ou firewalld) | `sudo rpgplay-server liberar-firewall` (seção 1) |
 | O jogador não vê o mapa | O Mestre ainda não colocou o personagem dele numa cena (aba Grupo → arrastar para o mapa) |
 | O jogador vê um inimigo sumir | O Mestre escondeu o boneco ou o levou para outra cena |
 | "Cadastro fechado" | `RPG_ALLOW_REGISTRATION=true` no `server.env` e reinicie o serviço |
@@ -200,7 +219,7 @@ O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servi
 
 Também funciona enviando uma tag (`git push origin v0.3.0`) ou pela aba **Actions → Release → Run workflow**: com **publicar** marcado, cria o Release; sem essa opção, os arquivos ficam só em *Artifacts*.
 
-**Chave de assinatura do APK (uma vez só):** o Android só atualiza um app se a nova versão tiver a mesma assinatura. Gere uma chave, guarde-a bem e cadastre nos *secrets* do repositório:
+**Chave de assinatura do APK (opcional, uma vez só):** sem chave própria, o APK sai assinado com a chave de debug do React Native. Ela é a mesma em todo build, então as atualizações instalam por cima da versão anterior. Mas é uma chave **pública**: qualquer pessoa conseguiria assinar um APK que se passa por atualização do seu. Para um grupo de amigos isso costuma bastar; para distribuir mais longe, gere uma chave, guarde-a bem e cadastre nos *secrets* do repositório. Trocar da chave de debug para a sua exige desinstalar o app uma vez.
 
 ```bash
 keytool -genkeypair -v -keystore rpgplay.jks -alias rpgplay -keyalg RSA -keysize 4096 -validity 10000
