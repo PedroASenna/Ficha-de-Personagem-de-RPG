@@ -7,13 +7,15 @@
     rpgplay-server backup ARQUIVO.tar.gz     # banco SQLite + imagens (mapas, retratos)
     rpgplay-server purge                     # retenção (log antigo, contas excluídas, campanhas abandonadas)
 
-Configuração: variáveis RPG_* (no pacote .deb, em /etc/rpgplay/server.env).
+Configuração: variáveis RPG_* (no pacote .deb, em /etc/rpgplay/server.env; no Windows, em
+C:\\ProgramData\\RPG Play\\servidor\\servidor.env).
 """
 
 import argparse
 import asyncio
 import os
 import secrets
+import socket
 import sqlite3
 import sys
 import tarfile
@@ -21,9 +23,11 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from app.core import netcheck
+from app.core import netcheck, winhost
 from app.core.config import Settings, ensure_runtime_secrets, get_settings
 from app.core.discovery import lan_addresses
+
+IS_WINDOWS = winhost.IS_WINDOWS
 
 
 def resource_root() -> Path:
@@ -65,6 +69,19 @@ def _print_info(settings: Settings) -> None:
         print(f"  Mestre (navegador): http://{ip}:{settings.port}/mestre")
 
 
+def port_available(host: str, port: int) -> bool:
+    """A porta está livre? (evita subir duas vezes; no Windows, dois cliques no atalho)"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        if not IS_WINDOWS:
+            # Igual ao uvicorn: sem isso, uma porta em TIME_WAIT de um reinício rápido pareceria ocupada.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -73,8 +90,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
     settings = load_settings()
     if args.port:
         settings = settings.model_copy(update={"port": args.port})
+    if not port_available(settings.host, settings.port):
+        where = winhost.default_data_dir() / winhost.ENV_FILE if IS_WINDOWS else "/etc/rpgplay/server.env"
+        print(
+            f"A porta {settings.port} já está em uso: o servidor RPG Play já está aberto"
+            f" (confira a barra de tarefas) ou outro programa usa essa porta."
+            f" Para usar outra porta, mude RPG_PORT em {where}.",
+            file=sys.stderr,
+        )
+        return 1
     migrate(settings)
+    if IS_WINDOWS:
+        # No Linux o expurgo diário é um timer do systemd; no Windows ele roda a cada abertura do servidor.
+        _purge(settings)
     _print_info(settings)
+    if IS_WINDOWS:
+        print("\nDeixe esta janela aberta enquanto jogam. Para desligar o servidor, feche a janela.\n")
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level="info")
     return 0
 
@@ -214,14 +245,17 @@ def cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_purge(args: argparse.Namespace) -> int:
+def _purge(settings: Settings) -> dict:
     from app.services.account import purge
     from app.services.media import build_media_store
 
+    return asyncio.run(_with_session(settings, lambda s: purge(s, settings, build_media_store(settings))))
+
+
+def cmd_purge(args: argparse.Namespace) -> int:
     settings = load_settings()
     migrate(settings)
-    result = asyncio.run(_with_session(settings, lambda s: purge(s, settings, build_media_store(settings))))
-    print(f"Expurgo concluído: {result}")
+    print(f"Expurgo concluído: {_purge(settings)}")
     return 0
 
 
@@ -248,6 +282,8 @@ def _is_root() -> bool:
 
 def cmd_diagnostico(args: argparse.Namespace) -> int:
     """Por que o celular não conecta? Confere servidor, endereço e firewall e diz o que fazer."""
+    if IS_WINDOWS:
+        return _diagnostico_windows()
     settings, checks, addresses, networks = _home_network()
     port = settings.port
     problems = 0
@@ -296,6 +332,11 @@ def cmd_diagnostico(args: argparse.Namespace) -> int:
                 problems += 1
                 print("      → sudo rpgplay-server liberar-firewall   (libera só para a rede de casa)")
 
+    _next_steps(addresses, port, problems)
+    return 0 if problems == 0 else 1
+
+
+def _next_steps(addresses: list[str], port: int, problems: int) -> None:
     if addresses:
         print(f"\nTeste no celular (no mesmo Wi-Fi): abra http://{addresses[0]}:{port}/api/v1/discovery no navegador.")
     if problems == 0:
@@ -304,11 +345,63 @@ def cmd_diagnostico(args: argparse.Namespace) -> int:
             " (não na rede de convidados), sem VPN e sem dados móveis, e se o roteador não isola os aparelhos"
             ' ("isolamento de clientes" / "AP isolation").'
         )
+
+
+def _diagnostico_windows() -> int:
+    """Versão do diagnóstico para o servidor instalado no Windows (Firewall do Windows em vez de ufw)."""
+    settings = get_settings()
+    port = settings.port
+    problems = 0
+    print("Diagnóstico do RPG Play (Windows)")
+    local = netcheck.probe(f"http://127.0.0.1:{port}")
+    if local:
+        print(f"  ✔ Servidor respondendo na porta {port} ({local.get('name')}, v{local.get('version')})")
+    else:
+        problems += 1
+        print(f"  ✘ Nada respondendo em http://127.0.0.1:{port}: o servidor está fechado.")
+        print('      → abra "RPG Play Servidor" no menu Iniciar e deixe a janela aberta')
+
+    addresses = lan_addresses()
+    if not addresses:
+        problems += 1
+        print("  ✘ Este computador não está numa rede local (Wi-Fi ou cabo desconectado?).")
+    for address in addresses:
+        print(f"  ✔ Endereço para os celulares: http://{address}:{port}")
+
+    code, _ = netcheck.run_command(winhost.firewall_show_command())
+    if code == 0:
+        print(f'  ✔ Firewall do Windows: regra "{winhost.FIREWALL_RULE}" libera o servidor para a rede local')
+    else:
+        problems += 1
+        print(f'  ✘ Firewall do Windows: falta a regra "{winhost.FIREWALL_RULE}" (os celulares ficam bloqueados)')
+        print('      → abra "Liberar no firewall" no menu Iniciar (pede permissão de administrador)')
+    _next_steps(addresses, port, problems)
     return 0 if problems == 0 else 1
 
 
+def _liberar_firewall_windows() -> int:
+    if not winhost.is_admin():
+        print(
+            'Precisa de administrador: abra "Liberar no firewall" no menu Iniciar, ou clique com o botão direito'
+            ' no Prompt de Comando → "Executar como administrador" e rode: rpgplay-server liberar-firewall',
+            file=sys.stderr,
+        )
+        return 1
+    delete, add = winhost.firewall_commands(winhost.server_executable())
+    netcheck.run_command(delete)  # pode não existir ainda
+    code, output = netcheck.run_command(add)
+    if code != 0:
+        print(output.strip(), file=sys.stderr)
+        print("Não consegui criar a regra no Firewall do Windows.", file=sys.stderr)
+        return 1
+    print(f'Pronto: regra "{winhost.FIREWALL_RULE}" criada no Firewall do Windows, só para a rede local.')
+    return 0
+
+
 def cmd_liberar_firewall(args: argparse.Namespace) -> int:
-    """Libera as portas do RPG Play no ufw ou firewalld, só para a rede de casa."""
+    """Libera as portas do RPG Play no ufw ou firewalld (ou no Firewall do Windows), só para a rede de casa."""
+    if IS_WINDOWS:
+        return _liberar_firewall_windows()
     if not _is_root():
         print("Rode com sudo: sudo rpgplay-server liberar-firewall", file=sys.stderr)
         return 1
@@ -353,7 +446,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("purge", help="aplica a retenção de dados")
     sub.add_parser("info", help="mostra os endereços para conectar")
     sub.add_parser("diagnostico", help="por que o celular não conecta? (servidor, endereço, firewall)")
-    sub.add_parser("liberar-firewall", help="libera as portas no ufw/firewalld só para a rede de casa")
+    sub.add_parser(
+        "liberar-firewall", help="libera o servidor no firewall (ufw, firewalld ou do Windows) só para a rede de casa"
+    )
     args = parser.parse_args(argv)
     handlers = {
         "serve": cmd_serve,

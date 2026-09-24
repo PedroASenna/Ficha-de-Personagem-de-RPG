@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     """Configuração lida de variáveis de ambiente com prefixo RPG_ (ex.: RPG_DATA_DIR).
 
     O padrão é o "modo casa": um processo só, SQLite e arquivos no diretório de dados.
-    No servidor instalado pelo .deb as variáveis vêm de /etc/rpgplay/server.env.
+    No servidor instalado pelo .deb as variáveis vêm de /etc/rpgplay/server.env; no Windows, de
+    C:\\ProgramData\\RPG Play\\servidor\\servidor.env (app/core/winhost.py).
     """
 
     model_config = SettingsConfigDict(env_prefix="RPG_", env_file=".env", extra="ignore")
@@ -72,7 +73,8 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_url(self) -> str:
-        return self.database_url or f"sqlite+aiosqlite:///{self.data_path / 'rpgplay.db'}"
+        # as_posix: no Windows a URL fica sqlite+aiosqlite:///C:/ProgramData/... (barras normais).
+        return self.database_url or f"sqlite+aiosqlite:///{(self.data_path / 'rpgplay.db').as_posix()}"
 
     @property
     def media_path(self) -> Path:

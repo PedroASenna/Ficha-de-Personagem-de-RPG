@@ -1,6 +1,7 @@
 # PyInstaller: executável do servidor (modo onedir) com as migrações, os sistemas de regras e o painel do Mestre.
-#   pyinstaller packaging/server/rpgplay-server.spec   (use packaging/server/build-deb.sh)
+#   Linux:   packaging/server/build-deb.sh     Windows: packaging/windows/build.ps1
 import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -21,10 +22,12 @@ hiddenimports = [
     "websockets.asyncio.server",
     "websockets.legacy.server",
     "httptools",
-    "uvloop",
     "multipart",
     "python_multipart",
 ]
+WINDOWS = sys.platform == "win32"
+if not WINDOWS:
+    hiddenimports.append("uvloop")  # não existe no Windows (o uvicorn usa o asyncio padrão)
 
 a = Analysis(
     [str(Path(SPECPATH) / "entry.py")],
@@ -41,6 +44,7 @@ a = Analysis(
 # libstdc++/libgcc_s vêm do sistema (todo Debian/Ubuntu tem; os wheels manylinux contam com isso). Levar a cópia
 # da máquina de build faria o pacote exigir a glibc dela.
 a.binaries = [b for b in a.binaries if not Path(b[0]).name.startswith(("libstdc++.so", "libgcc_s.so"))]
+ICON = ROOT / "packaging" / "windows" / "rpgplay.ico"
 
 pyz = PYZ(a.pure)
 exe = EXE(
@@ -50,6 +54,7 @@ exe = EXE(
     exclude_binaries=True,
     name="rpgplay-server",
     console=True,
+    icon=str(ICON) if WINDOWS else None,
     strip=False,
     upx=False,
 )

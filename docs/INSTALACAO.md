@@ -5,7 +5,7 @@ O RPG Play roda inteiro na sua casa, sem nuvem e sem loja de aplicativos:
 ```mermaid
 flowchart LR
   subgraph Casa["Rede de casa (Wi-Fi / cabo)"]
-    S["Servidor RPG Play<br/>PC Linux ou Raspberry Pi<br/>(pacote .deb)"]
+    S["Servidor RPG Play<br/>PC Linux, Windows ou Raspberry Pi<br/>(.deb ou instalador .exe)"]
     M["PC do Mestre<br/>RPG Play Mestre (.exe / .deb)<br/>ou navegador em /mestre"]
     J1["Celular do jogador<br/>app RPG Play (.apk)"]
     J2["Celular do jogador"]
@@ -17,7 +17,7 @@ flowchart LR
 
 | Peça | Arquivo | Quem usa |
 |---|---|---|
-| Servidor | `rpgplay-server_0.2.0_amd64.deb` (PC) ou `_arm64.deb` (Raspberry Pi 64 bits) | Fica ligado num canto da casa |
+| Servidor | `rpgplay-server_0.2.0_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.2.0.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
 | Programa do Mestre | `RPG-Play-Mestre-Setup-0.2.0.exe` (Windows) ou `rpgplay-mestre_0.2.0_amd64.deb` (Linux) | O Mestre, no PC |
 | App dos jogadores | `RPG-Play-0.2.0.apk` | Cada jogador, no celular Android |
 
@@ -29,8 +29,8 @@ Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador).
 
 ### O que precisa
 
-- Um computador que fica ligado durante as sessões: PC velho, notebook ou Raspberry Pi 4/5.
-- Linux baseado em Debian/Ubuntu (Debian 11 ou mais novo, Ubuntu 20.04 ou mais novo, Raspberry Pi OS 64 bits, Linux Mint...).
+- Um computador que fica ligado durante as sessões: PC velho, notebook ou Raspberry Pi 4/5. Pode ser o próprio PC do Mestre.
+- Linux baseado em Debian/Ubuntu (Debian 11 ou mais novo, Ubuntu 20.04 ou mais novo, Raspberry Pi OS 64 bits, Linux Mint...) **ou Windows 10/11 (64 bits)**: veja [Servidor no Windows](#servidor-no-windows).
 - Uns 300 MB de disco, mais o espaço dos mapas (cada mapa fica com poucos MB).
 
 ### Instalar
@@ -112,6 +112,45 @@ sudo systemctl restart rpgplay-server
 ### Raspberry Pi
 
 Use o **Raspberry Pi OS de 64 bits** e o pacote `_arm64.deb`. Com o Pi ligado por cabo no roteador, a mesa fica mais estável.
+
+### Servidor no Windows
+
+Para quem não tem um Linux em casa: o servidor roda também no Windows 10/11 de 64 bits, inclusive no mesmo PC em que o Mestre usa o programa do Mestre.
+
+1. Baixe `RPG-Play-Servidor-Setup-<versão>.exe` em [Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest) e abra. O Windows pode avisar "O Windows protegeu o computador" (o instalador não tem assinatura paga): clique em **Mais informações → Executar assim mesmo**.
+2. O instalador pede permissão de administrador para:
+   - instalar em `Arquivos de Programas\RPG Play Servidor`;
+   - liberar o servidor no **Firewall do Windows só para a rede local** (celulares da casa entram; ninguém de fora);
+   - criar os atalhos do menu Iniciar.
+
+   Deixe marcado **"Abrir o servidor junto com o Windows"** se esse PC vai ser sempre o servidor: ele liga sozinho, minimizado na barra de tarefas.
+3. Abra **RPG Play Servidor** no menu Iniciar. Aparece uma janela com os endereços, por exemplo:
+
+   ```
+   RPG Play: Mesa de RPG
+     jogadores (app):   http://192.168.0.20:8080
+     Mestre (navegador): http://192.168.0.20:8080/mestre
+
+   Deixe esta janela aberta enquanto jogam. Para desligar o servidor, feche a janela.
+   ```
+
+   **Enquanto a janela estiver aberta, a mesa funciona.** Fechou, desligou (as campanhas ficam salvas).
+
+No menu Iniciar, na pasta **RPG Play Servidor**, também ficam:
+
+| Atalho | Para quê |
+|---|---|
+| Diagnóstico de rede | O celular não conecta? Confere se o servidor está aberto, mostra o endereço e se o firewall está liberado |
+| Liberar no firewall | Refaz a liberação no Firewall do Windows (pede administrador) |
+| Pasta das campanhas | `C:\ProgramData\RPG Play\servidor`: banco, mapas, retratos e o arquivo de configuração `servidor.env` (nome da mesa, porta, cadastro aberto) |
+| Painel do Mestre (navegador) | Abre `http://localhost:8080/mestre` |
+
+Dicas:
+- Deixe o PC **sem hibernar** durante a sessão (Configurações → Sistema → Energia).
+- A mesma pasta de campanhas vale para qualquer usuário do PC. Para mudar o nome da mesa ou fechar o cadastro, edite `servidor.env` e abra o servidor de novo.
+- Os comandos do Linux também existem aqui. Abra o Prompt de Comando na pasta do programa (`C:\Program Files\RPG Play Servidor`) e use `rpgplay-server.exe`, por exemplo: `rpgplay-server.exe reset-password fulano` ou `rpgplay-server.exe backup C:\Users\voce\Desktop\rpgplay-backup.tar.gz`. Os backups são os mesmos do Linux, então dá para levar a campanha do Windows para um servidor Linux e vice-versa.
+- **Atualizar:** baixe o instalador novo e instale por cima. O servidor aberto é fechado, e as campanhas continuam.
+- **Desinstalar:** Configurações → Aplicativos → RPG Play Servidor. As campanhas ficam, a não ser que você responda **Sim** para apagá-las.
 
 ### Alternativa: Docker
 
@@ -199,7 +238,9 @@ Dica: guarde o backup fora do servidor (pendrive ou outro PC) de vez em quando.
 |---|---|
 | O app ou o programa do PC não acha o servidor | **Primeiro teste:** abra `http://IP-DO-SERVIDOR:8080/api/v1/discovery` no navegador do celular. Se não abrir, no servidor rode `sudo rpgplay-server diagnostico`: quase sempre é o **firewall**, e `sudo rpgplay-server liberar-firewall` resolve. Depois, confira se todos estão no **mesmo Wi-Fi**. Desligue **VPN** e "Wi-Fi privado"/"endereço aleatório" que bloqueiem a rede local. Veja se o roteador **não isola os aparelhos** ("isolamento de clientes", "AP isolation" ou rede de convidados). Se não der, digite o IP do servidor à mão. |
 | Achava e parou de achar | O IP do servidor mudou: faça a reserva de DHCP (seção 1) e escolha o servidor de novo |
-| "Sem conexão com o servidor" | Servidor desligado ou serviço parado: `sudo systemctl restart rpgplay-server` |
+| "Sem conexão com o servidor" | Servidor desligado ou serviço parado: `sudo systemctl restart rpgplay-server`. No Windows: a janela do servidor foi fechada ou o PC hibernou; abra **RPG Play Servidor** no menu Iniciar |
+| Servidor no Windows e o celular não conecta | Menu Iniciar → RPG Play Servidor → **Diagnóstico de rede**. Se faltar a regra do firewall, use **Liberar no firewall**. Se, ao abrir o servidor pela primeira vez, o Windows perguntou sobre o firewall e alguém clicou em **Cancelar**, rode **Liberar no firewall** e confira em "Firewall do Windows → Permitir um aplicativo" que `rpgplay-server` não está bloqueado |
+| "A porta 8080 já está em uso" | O servidor já está aberto (veja a barra de tarefas) ou outro programa usa a porta. Para trocar, mude `RPG_PORT` no `server.env` (Linux) ou no `servidor.env` (Windows) |
 | Firewall do servidor bloqueando (ufw ou firewalld) | `sudo rpgplay-server liberar-firewall` (seção 1) |
 | O jogador não vê o mapa | O Mestre ainda não colocou o personagem dele numa cena (aba Grupo → arrastar para o mapa) |
 | O jogador vê um inimigo sumir | O Mestre escondeu o boneco ou o levou para outra cena |
@@ -212,7 +253,7 @@ Para quem mexe no código. Cada parte tem teste automatizado; veja o `README.md`
 
 ### Pelo GitHub Actions (todos de uma vez)
 
-O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o `.exe` e o `.deb` do Mestre e o APK, e publica tudo num Release do GitHub. Para lançar uma versão nova:
+O workflow **Release** (`.github/workflows/release.yml`) gera os `.deb` do servidor (amd64 e arm64), o instalador do servidor para Windows, o `.exe` e o `.deb` do Mestre e o APK, e publica tudo num Release do GitHub. Para lançar uma versão nova:
 
 1. Aumente a versão em `backend/pyproject.toml` (e, para ficar tudo igual, em `web/package.json`, `desktop/package.json`, `mobile/package.json` e em `version`/`versionCode` do `mobile/app.config.ts`).
 2. Faça push para `main`. Se ainda não existe o Release `v<versão>`, o workflow compila tudo (uns 20 a 30 minutos) e publica, criando a tag. Pushes sem mudança de versão só fazem uma checagem rápida.
@@ -233,6 +274,7 @@ Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_AL
 | O quê | Comando | Precisa de |
 |---|---|---|
 | Servidor `.deb` | `packaging/server/build-deb.sh` | Node 22, Python 3.11+, `dpkg-deb`. Para o pacote rodar em distros antigas, use um Python portátil: `PYTHON=$(uv python find 3.12) packaging/server/build-deb.sh` |
+| Servidor `.exe` (Windows) | `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1` | Windows, Node 22, Python 3.12 e NSIS (se faltar, o script instala pelo Chocolatey). `packaging\windows\test-install.ps1` instala, testa e desinstala (como administrador) |
 | Mestre `.deb` | `cd desktop && npm ci && npm run dist:linux` | Node 22 |
 | Mestre `.exe` | `cd desktop && npm ci && npm run dist:win` | Windows, ou Linux com `wine` (32 e 64 bits) |
 | APK | `cd mobile && npm ci && npm run apk` | Android SDK + JDK 17. Sai em `mobile/android/app/build/outputs/apk/release/` |

@@ -31,7 +31,8 @@ def run_command(args: list[str]) -> tuple[int, str]:
     try:
         # Saída sempre em inglês: a análise não pode depender do idioma do sistema.
         env = {**os.environ, "LC_ALL": "C", "LANG": "C"}
-        done = subprocess.run(args, capture_output=True, text=True, timeout=15, check=False, env=env)
+        # errors="replace": no Windows o netsh escreve na página de código do console (ex.: cp850).
+        done = subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=15, check=False, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, str(exc)
     return done.returncode, (done.stdout or "") + (done.stderr or "")

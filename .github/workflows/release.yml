@@ -102,6 +102,35 @@ jobs:
           name: servidor-${{ matrix.arch }}
           path: dist/*.deb
 
+  server-windows:
+    name: servidor .exe (Windows)
+    needs: versao
+    if: needs.versao.outputs.gerar == 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Gerar o instalador (PyInstaller + NSIS)
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build.ps1
+      - name: Instalar, rodar e desinstalar no Windows
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/windows/test-install.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: servidor-windows
+          path: dist/RPG-Play-Servidor-Setup-*.exe
+
   desktop:
     name: programa do Mestre (${{ matrix.os }})
     needs: versao
@@ -189,7 +218,7 @@ jobs:
 
   release:
     name: publicar Release
-    needs: [versao, server, desktop, android]
+    needs: [versao, server, server-windows, desktop, android]
     if: needs.versao.outputs.publicar == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -208,5 +237,6 @@ jobs:
           body: |
             Instaladores do RPG Play para a rede de casa (veja docs/INSTALACAO.md):
             - `rpgplay-server_*_amd64.deb` / `_arm64.deb`: servidor (PC Linux sempre ligado ou Raspberry Pi 64 bits)
+            - `RPG-Play-Servidor-Setup-*.exe`: servidor no Windows (pode ser o próprio PC do Mestre)
             - `RPG-Play-Mestre-Setup-*.exe` / `rpgplay-mestre_*_amd64.deb`: programa do Mestre (Windows / Linux)
             - `RPG-Play-*.apk`: app dos jogadores (Android)

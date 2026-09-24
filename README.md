@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml/badge.svg)](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml)
 
-RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
+RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Windows ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
 
 - **Personagem jogável em um toque** (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico) e **HUD de combate** com barra de PV que sangra e brilha.
 - **Mesa virtual do Mestre:** mapas importados em **cenas** (troca quando o grupo se separa), **várias imagens de cenário na mesma cena** (mover, girar e redimensionar, uma ou várias de uma vez), **objetos que carregam** bonecos (carroça, barco, jaula), bonecos com a imagem dos personagens e **inimigos criados na hora**. Clicar num boneco mostra **os atributos em tempo real**, com dano, cura, rolagens secretas e **subir de nível**.
@@ -14,7 +14,7 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou 
 
 | Peça | Instalador | Tecnologia |
 |---|---|---|
-| Servidor | `.deb` (amd64, arm64) ou Docker | Python · FastAPI · WebSocket · SQLite (Postgres/Redis opcionais) · systemd |
+| Servidor | `.deb` (amd64, arm64), instalador `.exe` (Windows) ou Docker | Python · FastAPI · WebSocket · SQLite (Postgres/Redis opcionais) · systemd no Linux |
 | Programa do Mestre (PC) | `.exe` (Windows) e `.deb` (Linux) | Electron, que carrega o painel web servido pelo servidor |
 | Painel do Mestre (web) | vem dentro do servidor, em `/mestre` | React 19 · MUI · react-konva · TanStack Query · zustand |
 | App dos jogadores | `.apk` (Android) | Expo SDK 57 · React Native 0.86 · Reanimated 4 · react-native-svg · Paper (Material 3) |
@@ -88,7 +88,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 
 ## Verificação feita
 
-- **Servidor:** 136 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+- **Servidor:** 141 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
   - contas locais e admin;
   - descoberta HTTP e UDP;
   - campanhas arquivadas e reabertas;
@@ -117,6 +117,11 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - ligar a névoa (a jogadora passa a receber a própria exploração);
   - subir a personagem de nível pela mesa;
   - criar e revelar uma nação e liberar o mapa-múndi (sem as notas secretas).
+- **Servidor no Windows:** o CI gera o instalador num Windows de verdade (GitHub Actions) e, a cada push, instala em silêncio e confere:
+  - atalhos, pasta de dados e a regra do Firewall do Windows só para a rede local;
+  - o servidor instalado respondendo (HTTP, painel, descoberta UDP, cadastro) com o `servidor.env`;
+  - o diagnóstico, o aviso de porta em uso e o `liberar-firewall`;
+  - a desinstalação mantendo as campanhas.
 - **Programa do Mestre:** 8 testes Vitest e um Playwright + Electron que roda contra o código **e** contra o `.deb` instalado:
   - acha o servidor sozinho por UDP;
   - isola o painel;
@@ -128,7 +133,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 - **App:** 105 testes Jest (descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
 - **Não verificado aqui:**
   - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
-  - o `.exe` não rodou num **Windows de verdade**;
+  - o `.exe` do **programa do Mestre** não rodou num Windows de verdade (o do servidor roda no CI);
   - a descoberta não foi testada num **Wi-Fi real** com celulares;
   - a imagem Docker não foi gerada (Docker Hub bloqueado aqui).
 

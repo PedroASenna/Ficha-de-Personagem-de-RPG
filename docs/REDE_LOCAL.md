@@ -13,6 +13,8 @@ Ambas configuráveis: `RPG_PORT` e `RPG_DISCOVERY_PORT` (e `RPG_DISCOVERY_ENABLE
 
 Com firewall ativo no servidor, `sudo rpgplay-server liberar-firewall` libera as duas portas só para a sub-rede de casa (detectada por `ip -4 addr`), no ufw ou no firewalld. `sudo rpgplay-server diagnostico` confere servidor, endereço e firewall e diz o próximo passo.
 
+No **Windows**, o instalador cria a regra "RPG Play Servidor" no Firewall do Windows: entrada liberada para o programa `rpgplay-server.exe` (TCP e UDP), **só da sub-rede local** (`remoteip=localsubnet`, em qualquer perfil de rede, inclusive quando o Windows marca o Wi-Fi como "público"). O atalho "Liberar no firewall" refaz a regra e o "Diagnóstico de rede" confere se ela existe.
+
 ## Descoberta
 
 Três caminhos, do mais automático ao mais manual:
@@ -63,5 +65,6 @@ A premissa é **uma rede doméstica confiável**, sem exposição à internet.
 | Segredo JWT, id do servidor | `/var/lib/rpgplay/jwt_secret`, `/var/lib/rpgplay/server_id` |
 | Configuração | `/etc/rpgplay/server.env` |
 | Programa | `/opt/rpgplay-server/` (Python embutido; não usa o Python do sistema) |
+| No Windows | programa em `C:\Program Files\RPG Play Servidor`; banco, imagens, chaves e `servidor.env` em `C:\ProgramData\RPG Play\servidor` |
 
 Postgres e Redis continuam suportados (`RPG_DATABASE_URL`, `RPG_REDIS_URL`) para quem quiser, mas não são necessários: um processo com SQLite atende uma mesa de casa com folga.
