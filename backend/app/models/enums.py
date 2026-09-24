@@ -55,7 +55,21 @@ class SessionEventType(StrEnum):
     JOIN = "join"
     LEAVE = "leave"
     REST = "rest"
+    LEVEL_UP = "level_up"
     SYSTEM = "system"
+
+
+class FactionKind(StrEnum):
+    NATION = "nation"
+    FACTION = "faction"
+
+
+class RelationKind(StrEnum):
+    ALLIANCE = "alliance"
+    FRIENDLY = "friendly"
+    NEUTRAL = "neutral"
+    TENSE = "tense"
+    WAR = "war"
 
 
 class Visibility(StrEnum):

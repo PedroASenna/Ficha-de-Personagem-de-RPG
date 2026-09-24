@@ -9,7 +9,7 @@
   "license_url": null,
   "attribution": "",
   "source_url": null,
-  "description": "Para qualquer sistema ou homebrew: raça, classe e antecedente em texto livre, seis atributos de 1 a 20 e d20 como teste padrão. Use também para sistemas cuja licença não permite apps (ex.: ficha em branco).",
+  "description": "Para qualquer sistema ou homebrew: raça e origem digitadas por você, com os pontos de atributo que cada uma dá, classe da lista ou em texto livre, seis atributos de 1 a 20 e d20 como teste padrão. A cada nível você soma os pontos e os PV combinados com o Mestre.",
   "attributes": [
     { "key": "for", "name": "Força", "abbr": "FOR" },
     { "key": "agi", "name": "Agilidade", "abbr": "AGI" },
@@ -25,7 +25,8 @@
     "roll": "3d6",
     "manual": { "min": 1, "max": 20 }
   },
-  "ancestry_label": "Origem",
+  "ancestry_label": "Raça",
+  "background_label": "Origem",
   "ancestries": [],
   "classes": [
     { "key": "combatente", "name": "Combatente", "description": "Linha de frente: força e resistência.", "attribute_priority": ["for", "vig", "agi", "per", "pre", "int"] },
@@ -36,7 +37,10 @@
   "backgrounds": [],
   "background_bonus": { "strategy": "none" },
   "allow_custom": true,
+  "custom_bonus": { "min": -5, "max": 5 },
+  "custom_required": ["ancestry", "background"],
   "hp": { "strategy": "fixed", "value": 10, "minimum": 1 },
   "carry": { "strategy": "fixed", "value": 50, "unit": "kg" },
+  "level_up": { "max_level": 30, "free_points": true },
   "dice": { "default_check": "1d20", "direction": "high", "generic_crits": true, "crit_rules": [] }
 }

@@ -8,11 +8,14 @@ Cliente → servidor
     {"type": "hp.change", "character_id" | "npc_id": "...", "delta": 7, "kind": "damage" | "heal" | "temp",
      "expected_version": 12}
     {"type": "token.move", "token_id": "...", "x": 350.0, "y": 420.0}           # só o Mestre
+    {"type": "object.move", "object_id": "...", "x": 350.0, "y": 420.0, "rotation": 0}   # só o Mestre
 
 Servidor → cliente
     welcome (com a mesa) · pong · presence · roll.result · hp.changed · member.kicked · room.closed · error
     scene.upserted/deleted · token.upserted/moved/deleted · npc.upserted/deleted · npc.hp.changed (Mestre)
-    view.reset (a cena do jogador mudou) · party.updated (entrou/saiu alguém do grupo)
+    image.upserted/deleted (peças de cenário) · object.upserted/deleted (com os ocupantes que andaram junto)
+    fog.revealed/reset (névoa: o jogador só recebe a do próprio personagem) · world.updated (mapa-múndi)
+    character.leveled · view.reset (a cena do jogador mudou) · party.updated (entrou/saiu alguém do grupo)
 """
 
 import uuid
@@ -75,7 +78,19 @@ class TokenMoveMsg(BaseModel):
     y: float = Field(ge=-10000, le=20000)
 
 
-ClientMessage = Annotated[PingMsg | RollRequestMsg | HpChangeMsg | TokenMoveMsg, Field(discriminator="type")]
+class ObjectMoveMsg(BaseModel):
+    """Só o Mestre: arrasta uma carroça/barco; quem está dentro vai junto."""
+
+    type: Literal["object.move"]
+    object_id: uuid.UUID
+    x: float = Field(ge=-10000, le=20000)
+    y: float = Field(ge=-10000, le=20000)
+    rotation: float | None = Field(default=None, ge=-360, le=360)
+
+
+ClientMessage = Annotated[
+    PingMsg | RollRequestMsg | HpChangeMsg | TokenMoveMsg | ObjectMoveMsg, Field(discriminator="type")
+]
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 
 

@@ -5,6 +5,7 @@ from PIL import Image
 from tests.conftest import auth, quick_character, register
 
 API = "/api/v1"
+ATTRS = ["for", "agi", "vig", "int", "per", "pre"]
 
 
 def test_health(client):
@@ -173,14 +174,45 @@ def test_custom_options_in_generic_ruleset(client):
         headers=h,
     )
     assert r.json()["ancestry_name"] == "Androide"
-    client.post(f"{API}/characters/{cid}/attributes", json={"method": "roll"}, headers=h)
+    client.post(
+        f"{API}/characters/{cid}/attributes", json={"method": "manual", "scores": dict.fromkeys(ATTRS, 10)}, headers=h
+    )
+    # Raça e origem são obrigatórias no genérico, digitadas pelo jogador.
+    draft = client.get(f"{API}/characters/{cid}", headers=h).json()
+    assert "background" in draft["missing"]
+    assert client.post(f"{API}/characters/{cid}/finalize", headers=h).status_code == 422
+
+    # Pontos de atributo digitados à mão para a raça e para a origem.
+    r = client.patch(f"{API}/characters/{cid}", json={"ancestry_bonus": {"for": 2, "int": -1}}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["ancestry_bonus"] == {"for": 2, "int": -1}
+    assert r.json()["attributes"]["for"] == 12 and r.json()["attributes"]["int"] == 9
+    r = client.patch(
+        f"{API}/characters/{cid}",
+        json={"background_key": "custom", "background_name": "Contrabandista", "background_bonus": {"agi": 1}},
+        headers=h,
+    )
+    assert r.json()["background_name"] == "Contrabandista" and r.json()["attributes"]["agi"] == 11
+    assert r.json()["attribute_audit"]["bonuses"] == {"for": 2, "int": -1, "agi": 1}
+    # Fora dos limites do sistema (-5 a +5) ou em atributo que não existe: recusado.
+    bad = client.patch(f"{API}/characters/{cid}", json={"ancestry_bonus": {"for": 9}}, headers=h)
+    assert bad.status_code == 422 and "-5 a 5" in bad.json()["detail"]
+    assert client.patch(f"{API}/characters/{cid}", json={"background_bonus": {"xyz": 1}}, headers=h).status_code == 422
+    # Trocar a raça zera os pontos dela.
+    r = client.patch(f"{API}/characters/{cid}", json={"ancestry_key": "custom", "ancestry_name": "Elfo"}, headers=h)
+    assert r.json()["ancestry_bonus"] == {"for": 2, "int": -1}  # mesma chave "custom": só o nome muda
+
     final = client.post(f"{API}/characters/{cid}/finalize", headers=h).json()
     assert final["status"] == "complete" and final["hp_max"] == 10
-    assert len(final["attribute_audit"]["rolls"]) == 6
     assert client.patch(f"{API}/characters/{cid}", json={"hp_max": 25}, headers=h).json()["hp_max"] == 25
     # Na 5ª edição o PV máximo é calculado, não editável.
     other = quick_character(client, user)
     assert client.patch(f"{API}/characters/{other['id']}", json={"hp_max": 99}, headers=h).status_code == 422
+    # Pontos à mão só existem em sistemas livres.
+    assert (
+        client.patch(f"{API}/characters/{other['id']}", json={"ancestry_bonus": {"str": 1}}, headers=h).status_code
+        == 422
+    )
 
 
 def test_quick_create_is_playable(client):

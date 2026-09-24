@@ -28,6 +28,8 @@ class Character(TimestampMixin, Base):
     ancestry_key: Mapped[str | None] = mapped_column(String(64))
     ancestry_name: Mapped[str | None] = mapped_column(String(60))
     ancestry_choices: Mapped[list[Any]] = mapped_column(default=list)
+    # Pontos de atributo digitados à mão para uma raça personalizada (sistema genérico).
+    ancestry_bonus: Mapped[dict[str, Any]] = mapped_column(default=dict)
     class_key: Mapped[str | None] = mapped_column(String(64))
     class_name: Mapped[str | None] = mapped_column(String(60))
     background_key: Mapped[str | None] = mapped_column(String(64))

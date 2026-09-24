@@ -103,6 +103,7 @@
   "allow_custom": true,
   "hp": { "strategy": "hit_die_max_plus_mod", "attribute": "con", "minimum": 1 },
   "carry": { "strategy": "attribute_multiplier", "attribute": "str", "multiplier": 15, "unit": "lb" },
+  "level_up": { "max_level": 20, "asi_levels": [4, 8, 12, 16, 19], "asi_points": 2, "attribute_max": 20 },
   "dice": {
     "default_check": "1d20",
     "direction": "high",

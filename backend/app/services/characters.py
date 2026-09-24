@@ -57,15 +57,22 @@ def _recompute_attributes(pack: RulesetPack, character: Character) -> None:
     base = (character.attribute_audit or {}).get("base")
     if not base:
         return
-    bonuses = rules.compute_bonuses(
+    bonuses = _bonuses(pack, character)
+    # advancement = pontos ganhos ao subir de nível (somados por cima de base + raça/antecedente).
+    advancement = character.attribute_audit.get("advancement") or {}
+    character.attributes = rules.final_attributes(base, rules.combine(bonuses, advancement))
+    character.attribute_audit = {**character.attribute_audit, "bonuses": bonuses}
+
+
+def _bonuses(pack: RulesetPack, character: Character) -> dict[str, int]:
+    return rules.compute_bonuses(
         pack,
         ancestry_key=character.ancestry_key,
         ancestry_choices=character.ancestry_choices or [],
+        ancestry_bonus=character.ancestry_bonus or {},
         background_key=character.background_key,
         background_bonus=character.background_bonus or {},
     )
-    character.attributes = rules.final_attributes(base, bonuses)
-    character.attribute_audit = {**character.attribute_audit, "bonuses": bonuses}
 
 
 def _recompute_hp(pack: RulesetPack, character: Character) -> None:
@@ -115,9 +122,12 @@ def apply_patch(pack: RulesetPack, character: Character, patch: CharacterPatch) 
         new_key, name = _set_choice(pack, "ancestry", data["ancestry_key"], data.get("ancestry_name"))
         if new_key != character.ancestry_key:
             character.ancestry_choices = []
+            character.ancestry_bonus = {}
         character.ancestry_key, character.ancestry_name = new_key, name
     if data.get("ancestry_choices") is not None:
         character.ancestry_choices = data["ancestry_choices"]
+    if data.get("ancestry_bonus") is not None:
+        character.ancestry_bonus = data["ancestry_bonus"]
     if "class_key" in data:
         character.class_key, character.class_name = _set_choice(
             pack, "class", data["class_key"], data.get("class_name")
@@ -133,13 +143,7 @@ def apply_patch(pack: RulesetPack, character: Character, patch: CharacterPatch) 
         character.level = data["level"]
 
     # Valida as escolhas de bônus mesmo antes de haver atributos base.
-    rules.compute_bonuses(
-        pack,
-        ancestry_key=character.ancestry_key,
-        ancestry_choices=character.ancestry_choices or [],
-        background_key=character.background_key,
-        background_bonus=character.background_bonus or {},
-    )
+    _bonuses(pack, character)
     _recompute_attributes(pack, character)
     _recompute_hp(pack, character)
 
@@ -161,7 +165,8 @@ def generate_attributes(
 ) -> None:
     base, rolls = rules.generate_base(pack, method, class_key=character.class_key, scores=scores, rng=rng)
     character.attribute_method = method
-    character.attribute_audit = {"method": method.value, "base": base, "rolls": rolls}
+    kept = {k: v for k, v in (character.attribute_audit or {}).items() if k in ("advancement", "level_ups")}
+    character.attribute_audit = {"method": method.value, "base": base, "rolls": rolls, **kept}
     _recompute_attributes(pack, character)
     _recompute_hp(pack, character)
     character.version += 1
@@ -196,6 +201,7 @@ def new_character(pack: RulesetPack, owner: User, name: str = "") -> Character:
         wizard_step=0,
         name=name.strip(),
         ancestry_choices=[],
+        ancestry_bonus={},
         background_bonus={},
         level=1,
         attributes={},
@@ -219,6 +225,11 @@ def quick_create(
     cls = data.class_key or (rng.choice(pack.classes).key if pack.classes else None)
     background = data.background_key or (rng.choice(pack.backgrounds).key if pack.backgrounds else None)
     patch: dict[str, Any] = {"ancestry_key": ancestry, "class_key": cls, "background_key": background}
+    # Sistemas em que raça/origem são digitadas: nome padrão, sem pontos (o jogador ajusta depois).
+    if ancestry is None and "ancestry" in pack.custom_required:
+        patch |= {"ancestry_key": CUSTOM_KEY, "ancestry_name": data.ancestry_name or "Humano"}
+    if background is None and "background" in pack.custom_required:
+        patch |= {"background_key": CUSTOM_KEY, "background_name": data.background_name or "Aventureiro"}
     apply_patch(pack, character, CharacterPatch(**patch))
 
     anc = pack.ancestry(ancestry) if ancestry else None
@@ -237,6 +248,42 @@ def quick_create(
     finalize(pack, character)
     character.wizard_step = 5
     return character
+
+
+def level_up(
+    pack: RulesetPack, character: Character, increases: dict[str, int], hp_gain: int | None
+) -> dict[str, Any]:
+    """Sobe um nível: PV pela classe (5ª edição) ou digitados; pontos de atributo onde o sistema dá."""
+    if character.status != CharacterStatus.COMPLETE:
+        raise DomainError("Conclua o personagem antes de subir de nível.")
+    new_level, points = rules.validate_level_up(
+        pack, level=character.level, attributes=character.attributes or {}, increases=increases, hp_gain=hp_gain
+    )
+    hp_before = character.hp_max
+    audit = dict(character.attribute_audit or {})
+    audit["advancement"] = rules.combine(audit.get("advancement") or {}, points)
+    audit["level_ups"] = [*(audit.get("level_ups") or []), {"level": new_level, "attributes": points, "hp": hp_gain}]
+    character.attribute_audit = audit
+    character.level = new_level
+    if audit.get("base"):
+        _recompute_attributes(pack, character)
+    else:
+        character.attributes = rules.combine(character.attributes or {}, points)
+    if hp_gain is None:
+        _recompute_hp(pack, character)
+    else:
+        character.hp_max += hp_gain
+        character.hp_current = min(character.hp_max, character.hp_current + hp_gain)
+    character.version += 1
+    return {"level": new_level, "hp_gain": character.hp_max - hp_before, "attributes": points}
+
+
+def level_summary(pack: RulesetPack, name: str, result: dict[str, Any]) -> str:
+    abbr = {a.key: a.abbr for a in pack.attributes}
+    parts = [f"+{result['hp_gain']} PV"] if result["hp_gain"] else []
+    parts += [f"{abbr.get(k, k)} +{v}" for k, v in result["attributes"].items()]
+    extra = f" ({', '.join(parts)})" if parts else ""
+    return f"{name} subiu para o nível {result['level']}!{extra}"
 
 
 def apply_hp_change(character: Character, delta: int, kind: str, expected_version: int | None) -> dict[str, Any]:
@@ -295,6 +342,7 @@ def to_out(pack: RulesetPack, character: Character, media: MediaStore) -> Charac
         ancestry_key=character.ancestry_key,
         ancestry_name=character.ancestry_name,
         ancestry_choices=character.ancestry_choices or [],
+        ancestry_bonus=character.ancestry_bonus or {},
         class_key=character.class_key,
         class_name=character.class_name,
         background_key=character.background_key,

@@ -21,6 +21,9 @@ class CharacterQuickCreate(BaseModel):
     ancestry_key: str | None = Field(default=None, max_length=64)
     class_key: str | None = Field(default=None, max_length=64)
     background_key: str | None = Field(default=None, max_length=64)
+    # Sistemas com raça/origem digitadas (genérico).
+    ancestry_name: str | None = Field(default=None, max_length=60)
+    background_name: str | None = Field(default=None, max_length=60)
 
 
 class CharacterPatch(BaseModel):
@@ -29,6 +32,8 @@ class CharacterPatch(BaseModel):
     ancestry_key: str | None = Field(default=None, max_length=64)
     ancestry_name: str | None = Field(default=None, max_length=60)
     ancestry_choices: list[str] | None = Field(default=None, max_length=6)
+    # Raça personalizada: pontos de atributo digitados (ex.: {"for": 2, "int": -1}).
+    ancestry_bonus: dict[str, int] | None = None
     class_key: str | None = Field(default=None, max_length=64)
     class_name: str | None = Field(default=None, max_length=60)
     background_key: str | None = Field(default=None, max_length=64)
@@ -44,6 +49,21 @@ class CharacterPatch(BaseModel):
 class AttributeGenerateIn(BaseModel):
     method: AttributeMethod
     scores: dict[str, int] | None = None
+
+
+class LevelUpIn(BaseModel):
+    # Pontos de atributo deste nível (ex.: {"str": 2} no nível 4 da 5ª edição).
+    attributes: dict[str, int] = Field(default_factory=dict, max_length=12)
+    # PV ganhos, nos sistemas em que não são calculados pela classe.
+    hp_gain: int | None = Field(default=None, ge=0, le=999)
+    expected_version: int | None = None
+
+
+class LevelUpOut(BaseModel):
+    level: int
+    hp_gain: int
+    attributes: dict[str, int]
+    summary: str
 
 
 class HpChangeIn(BaseModel):
@@ -120,6 +140,7 @@ class CharacterOut(BaseModel):
     ancestry_key: str | None
     ancestry_name: str | None
     ancestry_choices: list[str]
+    ancestry_bonus: dict[str, int]
     class_key: str | None
     class_name: str | None
     background_key: str | None

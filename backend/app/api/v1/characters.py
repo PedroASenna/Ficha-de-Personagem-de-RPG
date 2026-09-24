@@ -20,10 +20,11 @@ from app.schemas.characters import (
     HpTransitionOut,
     ItemIn,
     ItemPatch,
+    LevelUpIn,
     RestIn,
 )
 from app.services import characters as service
-from app.ws.events import announce_hp_change, rooms_with_character
+from app.ws.events import announce_hp_change, announce_level_up, rooms_with_character
 
 router = APIRouter(prefix="/characters", tags=["personagens"])
 
@@ -224,6 +225,43 @@ async def take_rest(
         )
     else:
         await db.commit()
+    return await _out(db, state, character_id)
+
+
+async def level_up_and_announce(
+    db: AsyncSession, state: AppState, user: User, character: Character, data: LevelUpIn
+) -> None:
+    """Usado pela ficha (dono) e pela mesa (Mestre): sobe o nível, grava no log e avisa as mesas abertas."""
+    if data.expected_version is not None and data.expected_version != character.version:
+        raise ConflictError("A ficha mudou enquanto você editava. Confira o nível atual.")
+    pack = service.pack_for(state.registry, character.ruleset_id)
+    result = service.level_up(pack, character, data.attributes, data.hp_gain)
+    rooms = [r.id for r in await rooms_with_character(db, character.id)]
+    if not rooms:
+        await db.commit()
+        return
+    await announce_level_up(
+        db,
+        state.broadcaster,
+        room_ids=rooms,
+        actor_id=user.id,
+        character=character,
+        result=result,
+        summary=service.level_summary(pack, character.name, result),
+    )
+
+
+@router.post("/{character_id}/level-up", response_model=CharacterOut)
+async def level_up(
+    character_id: uuid.UUID,
+    data: LevelUpIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    """Sobe um nível: PV pela classe (5ª edição) ou os que o jogador informar; pontos de atributo onde o sistema dá."""
+    character = await service.get_owned(db, user, character_id)
+    await level_up_and_announce(db, state, user, character, data)
     return await _out(db, state, character_id)
 
 

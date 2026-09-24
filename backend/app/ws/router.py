@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.api.deps import AppState
 from app.core.errors import DomainError, ForbiddenError, NotFoundError, RateLimitedError
 from app.core.security import InvalidTokenError, decode_access_token
-from app.models import Character, Npc, Room, RoomMember, Token, User
+from app.models import Character, Npc, Room, RoomMember, Scene, SceneObject, Token, User
 from app.models.enums import RoomRole, Visibility
 from app.schemas.rooms import EventOut
 from app.services import characters as character_service
@@ -29,6 +29,7 @@ from app.ws.protocol import (
     CLOSE_UNAUTHORIZED,
     AuthMsg,
     HpChangeMsg,
+    ObjectMoveMsg,
     PingMsg,
     RollRequestMsg,
     TokenMoveMsg,
@@ -139,6 +140,8 @@ async def _dispatch(state: AppState, ctx: RoomContext, websocket: WebSocket, tex
             await _handle_hp(state, ctx, msg)
         elif isinstance(msg, TokenMoveMsg):
             await _handle_token_move(state, ctx, msg)
+        elif isinstance(msg, ObjectMoveMsg):
+            await _handle_object_move(state, ctx, msg)
     except (json.JSONDecodeError, ValidationError):
         await websocket.send_json(error_message("bad_request", "Mensagem inválida.", ref))
     except dice.NotationError as exc:
@@ -263,8 +266,26 @@ async def _handle_token_move(state: AppState, ctx: RoomContext, msg: TokenMoveMs
         token = await session.get(Token, msg.token_id)
         if token is None or token.room_id != ctx.room_id:
             raise NotFoundError("Boneco não encontrado.")
+        old = (token.x, token.y)
         token.x, token.y = msg.x, msg.y
         token.version += 1
+        scene = await session.get(Scene, token.scene_id)
+        revealed = await table_service.explore_moves(session, scene, [(token, [old, (token.x, token.y)])])
         await session.commit()
         room = await session.get(Room, ctx.room_id)
         await table_events.token_moved(state, session, room, token)
+        await table_events.fog_revealed(state, session, room, scene, revealed)
+
+
+async def _handle_object_move(state: AppState, ctx: RoomContext, msg: ObjectMoveMsg) -> None:
+    if ctx.role != RoomRole.MASTER:
+        raise ForbiddenError("Só o Mestre move os objetos.")
+    if not state.limiters.table.allow(f"table:{ctx.user_id}"):
+        return
+    async with state.db.sessionmaker() as session:
+        obj = await session.get(SceneObject, msg.object_id)
+        if obj is None or obj.room_id != ctx.room_id:
+            raise NotFoundError("Objeto não encontrado.")
+        room = await session.get(Room, ctx.room_id)
+        rotation = msg.rotation if msg.rotation is not None else obj.rotation
+        await table_events.move_object(state, session, room, obj, msg.x, msg.y, rotation)

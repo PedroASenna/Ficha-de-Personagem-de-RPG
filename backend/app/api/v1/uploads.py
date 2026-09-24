@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from app.api.deps import AppState, get_current_user, get_state
 from app.core.errors import DomainError, RateLimitedError
@@ -14,17 +14,19 @@ router = APIRouter(prefix="/uploads", tags=["uploads"])
 @router.post("/portrait", response_model=PortraitOut, status_code=status.HTTP_201_CREATED)
 async def upload_portrait(
     file: UploadFile = File(...),
+    rotation: float = Query(default=0, ge=-360, le=360),
     user: User = Depends(get_current_user),
     state: AppState = Depends(get_state),
 ):
-    """Recebe a foto já cortada no app, normaliza (512x512 JPEG, sem EXIF) e devolve a chave para a ficha."""
+    """Recebe a foto já cortada no app, gira (`rotation`, graus no sentido horário), normaliza (512x512 JPEG,
+    sem EXIF) e devolve a chave para a ficha."""
     if not state.limiters.upload.allow(f"upload:{user.id}"):
         raise RateLimitedError("Muitos envios seguidos. Aguarde um pouco.")
     data = await file.read(state.settings.max_upload_bytes + 1)
     if len(data) > state.settings.max_upload_bytes:
         raise DomainError("Imagem maior que 5 MB.")
     try:
-        processed = await asyncio.to_thread(process_portrait, data)
+        processed = await asyncio.to_thread(process_portrait, data, rotation)
     except InvalidImageError as exc:
         raise DomainError(str(exc)) from exc
     key = new_portrait_key(user.id)

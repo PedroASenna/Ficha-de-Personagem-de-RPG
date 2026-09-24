@@ -34,6 +34,12 @@ class Room(TimestampMixin, Base):
     # Campanha persistente: "closed" = arquivada (o Mestre reabre quando quiser).
     closed_at: Mapped[datetime | None]
     last_activity_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Mapa-múndi da campanha (nações e facções ficam em app/models/world.py). Os jogadores só veem
+    # a imagem depois que o Mestre libera.
+    world_map_key: Mapped[str | None] = mapped_column(String(255))
+    world_map_width: Mapped[int | None]
+    world_map_height: Mapped[int | None]
+    world_visible: Mapped[bool] = mapped_column(default=False)
 
 
 class RoomMember(Base):

@@ -101,11 +101,24 @@ def point_buy_spent(pack: RulesetPack, scores: Mapping[str, int]) -> int:
     return sum(costs.get(str(v), 0) for v in scores.values())
 
 
+def _custom_points(pack: RulesetPack, points: Mapping[str, int], label: str) -> dict[str, int]:
+    """Pontos digitados à mão para raça/origem personalizadas, dentro dos limites do sistema."""
+    rule = pack.custom_bonus
+    if rule is None:
+        raise RulesError("Este sistema não aceita pontos de atributo personalizados.")
+    if set(points) - set(pack.attribute_keys()):
+        raise RulesError(f"Atributo inválido nos pontos de {label}.")
+    if any(not rule.min <= amount <= rule.max for amount in points.values()):
+        raise RulesError(f"Os pontos de {label} vão de {rule.min} a {rule.max} em cada atributo.")
+    return {attr: amount for attr, amount in points.items() if amount}
+
+
 def compute_bonuses(
     pack: RulesetPack,
     *,
     ancestry_key: str | None,
     ancestry_choices: Sequence[str] = (),
+    ancestry_bonus: Mapping[str, int] | None = None,
     background_key: str | None = None,
     background_bonus: Mapping[str, int] | None = None,
 ) -> dict[str, int]:
@@ -114,6 +127,12 @@ def compute_bonuses(
 
     def add(attr: str, amount: int) -> None:
         bonuses[attr] = bonuses.get(attr, 0) + amount
+
+    if ancestry_bonus:
+        if ancestry_key != CUSTOM_KEY:
+            raise RulesError(f"Pontos à mão só valem para {pack.ancestry_label.lower()} personalizada.")
+        for attr, amount in _custom_points(pack, ancestry_bonus, pack.ancestry_label.lower()).items():
+            add(attr, amount)
 
     ancestry = pack.ancestry(ancestry_key) if ancestry_key else None
     if ancestry:
@@ -129,7 +148,10 @@ def compute_bonuses(
             for attr in picked:
                 add(attr, choice.amount)
 
-    if pack.background_bonus.strategy == "plus2_plus1" and background_bonus:
+    if background_key == CUSTOM_KEY and background_bonus:
+        for attr, amount in _custom_points(pack, background_bonus, pack.background_label.lower()).items():
+            add(attr, amount)
+    elif pack.background_bonus.strategy == "plus2_plus1" and background_bonus:
         background = pack.background(background_key) if background_key else None
         if background is None:
             raise RulesError("Escolha o antecedente antes de distribuir os bônus.")
@@ -142,6 +164,14 @@ def compute_bonuses(
             add(attr, amount)
 
     return bonuses
+
+
+def combine(*parts: Mapping[str, int]) -> dict[str, int]:
+    total: dict[str, int] = {}
+    for part in parts:
+        for attr, amount in part.items():
+            total[attr] = total.get(attr, 0) + amount
+    return total
 
 
 def final_attributes(base: Mapping[str, int], bonuses: Mapping[str, int]) -> dict[str, int]:
@@ -192,13 +222,13 @@ def missing_for_finalize(pack: RulesetPack, character: Any) -> list[str]:
     missing = []
     if not character.name.strip():
         missing.append("name")
-    if pack.ancestries and not character.ancestry_key:
+    if (pack.ancestries or "ancestry" in pack.custom_required) and not character.ancestry_key:
         missing.append("ancestry")
     if pack.classes and not character.class_key:
         missing.append("class")
     if set(character.attributes or {}) != set(pack.attribute_keys()):
         missing.append("attributes")
-    if pack.backgrounds and not character.background_key:
+    if (pack.backgrounds or "background" in pack.custom_required) and not character.background_key:
         missing.append("background")
     ancestry = pack.ancestry(character.ancestry_key) if character.ancestry_key else None
     if ancestry and ancestry.bonus_choices and len(character.ancestry_choices or []) != ancestry.bonus_choices.count:
@@ -213,3 +243,44 @@ def missing_for_finalize(pack: RulesetPack, character: Any) -> list[str]:
     if pack.hp.strategy == "hit_die_max_plus_mod" and (not character.class_key or character.class_key == CUSTOM_KEY):
         missing.append("class")
     return list(dict.fromkeys(missing))
+
+
+def validate_level_up(
+    pack: RulesetPack,
+    *,
+    level: int,
+    attributes: Mapping[str, int],
+    increases: Mapping[str, int],
+    hp_gain: int | None,
+) -> tuple[int, dict[str, int]]:
+    """Confere a subida do nível `level` para `level + 1`. Devolve (novo nível, pontos de atributo)."""
+    rule = pack.level_up
+    new_level = level + 1
+    if new_level > rule.max_level:
+        raise RulesError(f"O nível máximo deste sistema é {rule.max_level}.")
+    points = {attr: amount for attr, amount in increases.items() if amount}
+    if set(points) - set(pack.attribute_keys()):
+        raise RulesError("Atributo inválido.")
+    if any(amount < 0 for amount in points.values()):
+        raise RulesError("Ao subir de nível os atributos só aumentam.")
+    total = sum(points.values())
+    if rule.free_points:
+        if total > 10:
+            raise RulesError("No máximo 10 pontos de atributo por nível.")
+    elif new_level in rule.asi_levels:
+        # Pode pular (quem prefere um talento anota na ficha), mas se distribuir, é o total certo.
+        if total not in (0, rule.asi_points):
+            raise RulesError(f"No nível {new_level} são {rule.asi_points} pontos de atributo.")
+        if rule.attribute_max is not None:
+            over = [a for a, amount in points.items() if attributes.get(a, 0) + amount > rule.attribute_max]
+            if over:
+                raise RulesError(f"Nenhum atributo passa de {rule.attribute_max} assim.")
+    elif total:
+        raise RulesError(f"O nível {new_level} não dá pontos de atributo neste sistema.")
+
+    automatic = pack.hp.strategy == "hit_die_max_plus_mod"
+    if automatic and hp_gain is not None:
+        raise RulesError("Neste sistema os PV do novo nível são calculados pela classe e Constituição.")
+    if not automatic and hp_gain is None:
+        raise RulesError("Informe quantos PV o personagem ganha neste nível (pode ser 0).")
+    return new_level, points

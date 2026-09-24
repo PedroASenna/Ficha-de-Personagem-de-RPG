@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, LargeBinary, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -25,6 +25,54 @@ class Scene(TimestampMixin, Base):
     grid_size: Mapped[int] = mapped_column(default=70)
     grid_visible: Mapped[bool] = mapped_column(default=True)
     sort_order: Mapped[int] = mapped_column(default=0)
+    # Névoa de guerra: cada jogador só vê onde o próprio personagem já andou (o Mestre vê tudo, com
+    # o inexplorado levemente escurecido). fog_radius = quantas casas da grade o personagem enxerga.
+    fog_enabled: Mapped[bool] = mapped_column(default=False)
+    fog_radius: Mapped[int] = mapped_column(default=4)
+
+
+class SceneImage(Base):
+    """Peça de cenário: imagem posicionada, redimensionada, girada e empilhada sobre o mapa (várias por cena)."""
+
+    __tablename__ = "scene_images"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"))
+    scene_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
+    image_key: Mapped[str] = mapped_column(String(255))
+    # Centro da peça e tamanho em pixels do mapa; rotação em graus, sentido horário.
+    x: Mapped[float] = mapped_column(Float, default=0)
+    y: Mapped[float] = mapped_column(Float, default=0)
+    width: Mapped[float] = mapped_column(Float, default=100)
+    height: Mapped[float] = mapped_column(Float, default=100)
+    rotation: Mapped[float] = mapped_column(Float, default=0)
+    z: Mapped[int] = mapped_column(default=0)
+    # Travada: não sai do lugar sem querer enquanto o Mestre mexe no resto.
+    locked: Mapped[bool] = mapped_column(default=False)
+    version: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class SceneObject(Base):
+    """Objeto que carrega bonecos (carroça, barco, jaula): mover o objeto leva junto quem está dentro."""
+
+    __tablename__ = "scene_objects"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"))
+    scene_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    image_key: Mapped[str | None] = mapped_column(String(255))
+    x: Mapped[float] = mapped_column(Float, default=0)
+    y: Mapped[float] = mapped_column(Float, default=0)
+    width: Mapped[float] = mapped_column(Float, default=140)
+    height: Mapped[float] = mapped_column(Float, default=140)
+    rotation: Mapped[float] = mapped_column(Float, default=0)
+    z: Mapped[int] = mapped_column(default=0)
+    # Os jogadores veem o objeto, mas não quem está dentro (cada um ainda vê o próprio boneco).
+    hide_occupants: Mapped[bool] = mapped_column(default=False)
+    version: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Npc(TimestampMixin, Base):
@@ -65,6 +113,7 @@ class Token(Base):
             sqlite_where=text("character_id IS NOT NULL"),
         ),
         Index("ix_tokens_scene", "scene_id"),
+        Index("ix_tokens_container", "container_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -80,5 +129,23 @@ class Token(Base):
     # Escondido: só o Mestre vê (emboscadas).
     hidden: Mapped[bool] = mapped_column(default=False)
     z: Mapped[int] = mapped_column(default=0)
+    rotation: Mapped[float] = mapped_column(Float, default=0)
+    # Dentro de um objeto (carroça, barco...): anda junto quando o objeto é movido.
+    container_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("scene_objects.id", ondelete="SET NULL"))
     version: Mapped[int] = mapped_column(default=1)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class FogExplored(Base):
+    """Área que um personagem já explorou numa cena: um bit por célula da névoa (linha a linha)."""
+
+    __tablename__ = "fog_explored"
+
+    scene_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), primary_key=True)
+    character_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True)
+    # Geometria usada ao gravar: se o mapa ou a grade mudarem, a exploração antiga é descartada.
+    cols: Mapped[int]
+    rows: Mapped[int]
+    cell: Mapped[float] = mapped_column(Float)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

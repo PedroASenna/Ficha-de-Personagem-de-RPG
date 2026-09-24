@@ -84,6 +84,23 @@ class BackgroundBonusRule(_Strict):
     strategy: Literal["none", "plus2_plus1"] = "none"
 
 
+class CustomBonusRule(_Strict):
+    """Pontos de atributo digitados pelo jogador para raça/origem personalizadas (sistemas livres)."""
+
+    min: int = -5
+    max: int = 5
+
+
+class LevelUpRule(_Strict):
+    max_level: int = 20
+    # Níveis que dão pontos de atributo e quantos (5ª edição: +2 nos níveis 4, 8, 12, 16 e 19).
+    asi_levels: list[int] = []
+    asi_points: int = 0
+    attribute_max: int | None = None
+    # Sistemas livres: a cada nível o jogador soma os pontos que a mesa combinou, à mão.
+    free_points: bool = False
+
+
 class HpRule(_Strict):
     strategy: Literal["hit_die_max_plus_mod", "fixed", "manual"]
     attribute: str | None = None
@@ -129,15 +146,21 @@ class RulesetPack(_Strict):
     modifier: ModifierRule = ModifierRule()
     generation: GenerationMethods
     ancestry_label: str = "Raça"
+    background_label: str = "Antecedente"
     ancestries: list[Ancestry] = []
     classes: list[CharacterClass] = []
     backgrounds: list[Background] = []
     background_bonus: BackgroundBonusRule = BackgroundBonusRule()
     # Permite texto livre em raça/classe/antecedente (sistemas genéricos e homebrew).
     allow_custom: bool = False
+    # Com texto livre: pontos de atributo da raça/origem digitados pelo jogador.
+    custom_bonus: CustomBonusRule | None = None
+    # Escolhas obrigatórias mesmo sem lista de opções no pacote (o jogador digita).
+    custom_required: list[Literal["ancestry", "background"]] = []
     hp: HpRule
     carry: CarryRule
     dice: DiceRules = DiceRules()
+    level_up: LevelUpRule = LevelUpRule()
 
     @model_validator(mode="after")
     def _check_references(self) -> "RulesetPack":
@@ -155,6 +178,10 @@ class RulesetPack(_Strict):
         for rule in (self.hp.attribute, self.carry.attribute):
             if rule is not None and rule not in keys:
                 raise ValueError(f"atributo desconhecido: {rule}")
+        if self.custom_bonus and not self.allow_custom:
+            raise ValueError("custom_bonus exige allow_custom")
+        if self.level_up.asi_levels and self.level_up.asi_points <= 0:
+            raise ValueError("asi_levels sem asi_points")
         std = self.generation.standard_array
         if std is not None and len(std) != len(self.attributes):
             raise ValueError("standard_array precisa ter um valor por atributo")

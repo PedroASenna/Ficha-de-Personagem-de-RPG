@@ -109,3 +109,36 @@ async def announce_roll(
     audience = None if visibility == Visibility.PUBLIC else [str(master_id), str(actor_id)]
     message = server_message("roll.result", event_id=event.id, visibility=visibility.value, **payload)
     await broadcaster.publish(room_id, message, audience)
+
+
+async def announce_level_up(
+    session: AsyncSession,
+    broadcaster: Broadcaster,
+    *,
+    room_ids: list[uuid.UUID],
+    actor_id: uuid.UUID,
+    character: Character,
+    result: dict[str, Any],
+    summary: str,
+) -> None:
+    """Grava "subiu de nível" no log de cada mesa do personagem e avisa todos (nível e PV aparecem no grupo)."""
+    payload = {
+        "character": {"id": str(character.id), "name": character.name},
+        "level": result["level"],
+        "hp_gain": result["hp_gain"],
+        "attributes": result["attributes"],
+        "hp_current": character.hp_current,
+        "hp_max": character.hp_max,
+        "hp_temp": character.hp_temp,
+        "version": character.version,
+        "summary": summary,
+    }
+    events = []
+    for room_id in room_ids:
+        event = await record_event(
+            session, room_id, actor_id, SessionEventType.LEVEL_UP, payload, character_id=character.id
+        )
+        events.append((room_id, event.id))
+    await session.commit()
+    for room_id, event_id in events:
+        await broadcaster.publish(room_id, server_message("character.leveled", event_id=event_id, **payload))
