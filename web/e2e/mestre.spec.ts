@@ -68,25 +68,46 @@ async function snapshot(page: Page, name: string) {
   await page.screenshot({ path: `e2e-screenshots/${name}.png` });
 }
 
-/** Posição na tela (px da página) do boneco com este nome, lida do palco do Konva. */
-async function tokenOnScreen(page: Page, label: string): Promise<{ x: number; y: number }> {
-  const handle = await page.waitForFunction((name) => {
-    type KNode = {
-      name(): string;
-      getAbsolutePosition(): { x: number; y: number };
-      find(selector: string): KNode[];
-      text?: () => string;
-    };
-    const konva = (window as unknown as { Konva?: { stages: (KNode & { container(): HTMLElement })[] } }).Konva;
-    const stage = konva?.stages[0];
-    if (!stage) return null;
-    const group = stage.find(".token").find((g) => g.find("Text").some((t) => t.text?.().startsWith(name)));
-    if (!group) return null;
-    const rect = stage.container().getBoundingClientRect();
-    const pos = group.getAbsolutePosition();
-    return { x: rect.left + pos.x, y: rect.top + pos.y };
-  }, label);
+/** Posição na tela (px da página) do boneco (ou objeto) com este nome, lida do palco do Konva. */
+async function tokenOnScreen(page: Page, label: string, kind = ".token"): Promise<{ x: number; y: number }> {
+  const handle = await page.waitForFunction(
+    ([name, selector]) => {
+      type KNode = {
+        name(): string;
+        getAbsolutePosition(): { x: number; y: number };
+        find(selector: string): KNode[];
+        text?: () => string;
+      };
+      const konva = (window as unknown as { Konva?: { stages: (KNode & { container(): HTMLElement })[] } }).Konva;
+      const stage = konva?.stages[0];
+      if (!stage) return null;
+      const group = stage.find(selector).find((g) => g.find("Text").some((t) => t.text?.().startsWith(name)));
+      if (!group) return null;
+      const rect = stage.container().getBoundingClientRect();
+      const pos = group.getAbsolutePosition();
+      return { x: rect.left + pos.x, y: rect.top + pos.y };
+    },
+    [label, kind],
+  );
   return (await handle.jsonValue()) as { x: number; y: number };
+}
+
+/** Escala atual do palco (px da tela por px do mapa). */
+async function stageScale(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const konva = (window as unknown as { Konva?: { stages: { scaleX(): number }[] } }).Konva;
+    return konva?.stages[0]?.scaleX() ?? 1;
+  });
+}
+
+async function dragOnCanvas(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 10; step++) {
+    await page.mouse.move(from.x + ((to.x - from.x) * step) / 10, from.y + ((to.y - from.y) * step) / 10);
+    await page.waitForTimeout(30);
+  }
+  await page.mouse.up();
 }
 
 test("Mestre monta a mesa, move inimigos e a jogadora vê só o que deve", async ({ page, baseURL }) => {
@@ -116,6 +137,7 @@ test("Mestre monta a mesa, move inimigos e a jogadora vê só o que deve", async
     mimeType: "image/png",
     buffer: checkerPng(1000, 700),
   });
+  await page.getByRole("button", { name: "Enviar imagem" }).click(); // ajuste de ângulo antes de enviar
   await expect(page.getByText("Mapa 1000 × 700 px")).toBeVisible();
   await page.getByRole("button", { name: "Criar cena" }).click();
   await expect(page.getByRole("tab", { name: "Floresta" })).toBeVisible();
@@ -196,6 +218,88 @@ test("Mestre monta a mesa, move inimigos e a jogadora vê só o que deve", async
   await expect(page.getByTestId("join-pin")).toHaveText(pin);
   await expect(page.getByTestId("join-qr").locator("img")).toBeVisible();
   await snapshot(page, "conectar-celulares");
+  await page.keyboard.press("Escape");
+
+  // 10. Várias imagens de cenário de uma vez, com o ângulo ajustado antes de enviar.
+  await page.getByTestId("upload-pieces").setInputFiles([
+    { name: "arvore.png", mimeType: "image/png", buffer: checkerPng(200, 300) },
+    { name: "pedra.png", mimeType: "image/png", buffer: checkerPng(120, 120) },
+  ]);
+  const rotateDialog = page.getByRole("dialog");
+  await expect(rotateDialog.getByText("Ajustar o ângulo de 2 imagens")).toBeVisible();
+  await rotateDialog.getByRole("button", { name: "Girar 90° para a direita" }).first().click();
+  await rotateDialog.getByRole("button", { name: "Colocar 2 imagens" }).click();
+  await expect(page.getByTestId("pieces-panel")).toContainText("2 peças de cenário");
+  const firstPiece = await ana.waitFor((m) => m.type === "image.upserted");
+  const tree = firstPiece.image as { width: number; height: number };
+  expect(tree.width).toBeGreaterThan(tree.height); // 200×300 girado 90° no envio
+  // Girar as duas juntas pelo painel: a jogadora recebe o ângulo novo.
+  await page.getByTestId("pieces-panel").getByRole("button", { name: "Girar 90° para a direita" }).click();
+  await ana.waitFor((m) => m.type === "image.upserted" && (m.image as { rotation: number }).rotation === 90);
+
+  // 11. Objeto que carrega: Lyra entra na carroça e anda junto quando ela é arrastada.
+  await page.getByRole("button", { name: "Objeto", exact: true }).click();
+  await page.getByLabel("Nome").fill("Carroça");
+  await page.getByRole("button", { name: "Criar objeto" }).click();
+  await expect(page.getByTestId("object-panel")).toBeVisible();
+  const created = await ana.waitFor((m) => m.type === "object.upserted");
+  const cartObject = created.object as { id: string; width: number; height: number };
+  const scale = await stageScale(page);
+  const cart = await tokenOnScreen(page, "Carroça", ".object");
+  const lyra = await tokenOnScreen(page, "Lyra");
+  await dragOnCanvas(page, lyra, { x: cart.x + 4, y: cart.y + 4 });
+  await ana.waitFor(
+    (m) => m.type === "token.upserted" && (m.token as { container_id: string | null }).container_id === cartObject.id,
+  );
+  // Arrasta a carroça pela ponta esquerda (longe do boneco, que ficou no meio).
+  const cartNow = await tokenOnScreen(page, "Carroça (1)", ".object");
+  const grab = { x: cartNow.x - cartObject.width * 0.4 * scale, y: cartNow.y };
+  await dragOnCanvas(page, grab, { x: grab.x + 160, y: grab.y + 20 });
+  const carried = await ana.waitFor((m) => m.type === "object.upserted" && (m.tokens as unknown[]).length === 1);
+  expect((carried.tokens as { token_id: string }[])[0]?.token_id).toBeTruthy();
+
+  // 12. Névoa de guerra: a jogadora passa a receber a própria exploração.
+  await page.getByRole("button", { name: "Editar cena" }).click();
+  await page.getByLabel("Névoa de guerra").check();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  const fogged = await ana.waitFor((m) => m.type === "view.reset" && (m.table as { fog: unknown }).fog !== null);
+  expect((fogged.table as { scene: { fog_enabled: boolean } }).scene.fog_enabled).toBe(true);
+  await expect(page.getByTestId("fog-view")).toBeVisible();
+  await snapshot(page, "cenario-objeto-nevoa");
+
+  // 13. Subir de nível pela mesa.
+  await page.getByRole("tab", { name: /Grupo/ }).click();
+  await page.getByText("Lyra", { exact: true }).first().click();
+  await page.getByTestId("detail-panel").getByRole("button", { name: "Nível" }).click();
+  await page.getByRole("button", { name: "Subir para o nível 2" }).click();
+  const leveled = await ana.waitFor((m) => m.type === "character.leveled");
+  expect(leveled.level).toBe(2);
+  await expect(page.getByTestId("session-log")).toContainText("Lyra subiu para o nível 2");
+
+  // 14. Mapa-múndi com nações: a jogadora só vê o que foi revelado.
+  await page.getByRole("button", { name: "Mundo" }).click();
+  await page.getByRole("button", { name: "Nova nação" }).click();
+  await page.getByLabel("Nome").fill("Império de Ferro");
+  await page.getByLabel("Governante").fill("Imperatriz Liria");
+  await page.getByLabel("Notas secretas (só você)").fill("Planeja invadir o norte");
+  await page.getByRole("button", { name: "Criar", exact: true }).click();
+  await page.getByRole("button", { name: "Revelar Império de Ferro" }).click();
+  const world = await ana.waitFor(
+    (m) => m.type === "world.updated" && (m.world as { factions: unknown[] }).factions.length === 1,
+  );
+  const nation = (world.world as { factions: Record<string, unknown>[] }).factions[0];
+  expect(nation).toEqual(expect.objectContaining({ name: "Império de Ferro", leader: "Imperatriz Liria" }));
+  expect(nation).not.toHaveProperty("secret_notes");
+  await page.getByRole("button", { name: "Enviar mapa" }).first().click();
+  await page
+    .getByTestId("upload-map")
+    .setInputFiles({ name: "mundo.png", mimeType: "image/png", buffer: checkerPng(800, 500) });
+  await page.getByRole("button", { name: "Enviar imagem" }).click();
+  await expect(page.getByTestId("world-map")).toBeVisible();
+  await page.getByLabel("Mapa escondido dos jogadores").click();
+  await expect(page.getByLabel("Jogadores veem o mapa")).toBeChecked();
+  await ana.waitFor((m) => m.type === "world.updated" && Boolean((m.world as { map_url: string | null }).map_url));
+  await snapshot(page, "mapa-mundi");
 
   ana.close();
 });

@@ -76,3 +76,34 @@ export function gridLines(width: number, height: number, grid: number): { vertic
   for (let y = grid; y < height; y += grid) horizontal.push(y);
   return { vertical, horizontal };
 }
+
+/** Retângulo posicionado pelo centro e girado (graus, sentido horário): peças e objetos. */
+export interface RotatedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+/** O ponto cai dentro do retângulo girado? (desfaz a rotação e compara com as metades) */
+export function pointInRotatedRect(point: Point, rect: RotatedRect): boolean {
+  const angle = (-rect.rotation * Math.PI) / 180;
+  const dx = point.x - rect.x;
+  const dy = point.y - rect.y;
+  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  return Math.abs(localX) <= rect.width / 2 && Math.abs(localY) <= rect.height / 2;
+}
+
+/** Objeto de cima que contém o ponto (onde um boneco solto "entra"). */
+export function containerAt<T extends RotatedRect & { id: string; z: number }>(point: Point, objects: T[]): T | null {
+  const sorted = [...objects].sort((a, b) => b.z - a.z);
+  return sorted.find((obj) => pointInRotatedRect(point, obj)) ?? null;
+}
+
+/** Ângulo entre -180 e 180 (para mostrar e para o servidor, que aceita de -360 a 360). */
+export function normalizeAngle(degrees: number): number {
+  const angle = ((((degrees + 180) % 360) + 360) % 360) - 180;
+  return Math.round(angle * 10) / 10;
+}

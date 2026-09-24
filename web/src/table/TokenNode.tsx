@@ -16,6 +16,9 @@ export interface TokenVisual {
   ring: string;
   hp: number | null; // 0..1; null = sem barra
   hidden: boolean;
+  // Dentro de um objeto que esconde os ocupantes: os outros jogadores não veem.
+  concealed: boolean;
+  rotation: number;
   selected: boolean;
 }
 
@@ -53,7 +56,7 @@ export const TokenNode = memo(function TokenNode({ token, grid, onSelect, onDrag
       x={token.x}
       y={token.y}
       draggable
-      opacity={token.hidden ? 0.5 : 1}
+      opacity={token.hidden || token.concealed ? 0.5 : 1}
       onMouseDown={select}
       onTap={select}
       onDragMove={(e: KonvaEventObject<DragEvent>) => onDragMove(token.id, e.target.x(), e.target.y())}
@@ -86,6 +89,7 @@ export const TokenNode = memo(function TokenNode({ token, grid, onSelect, onDrag
           fillPatternRepeat="no-repeat"
           fillPatternScale={{ x: scale, y: scale }}
           fillPatternOffset={{ x: image.width / 2, y: image.height / 2 }}
+          fillPatternRotation={token.rotation}
         />
       ) : (
         <Text
@@ -99,9 +103,15 @@ export const TokenNode = memo(function TokenNode({ token, grid, onSelect, onDrag
           fontSize={r * 0.7}
           fontStyle="bold"
           fill="#f3e3bf"
+          rotation={token.rotation}
         />
       )}
-      <Circle radius={r} stroke={token.ring} strokeWidth={ringWidth} dash={token.hidden ? [8, 6] : undefined} />
+      <Circle
+        radius={r}
+        stroke={token.ring}
+        strokeWidth={ringWidth}
+        dash={token.hidden || token.concealed ? [8, 6] : undefined}
+      />
       {token.hp !== null && (
         <Arc
           innerRadius={r + ringWidth * 0.6}
@@ -112,7 +122,7 @@ export const TokenNode = memo(function TokenNode({ token, grid, onSelect, onDrag
         />
       )}
       <Text
-        text={token.hidden ? `${token.label} (escondido)` : token.label}
+        text={token.hidden ? `${token.label} (escondido)` : token.concealed ? `${token.label} (oculto)` : token.label}
         y={r + ringWidth * 2}
         width={Math.max(4 * r, 140)}
         offsetX={Math.max(2 * r, 70)}

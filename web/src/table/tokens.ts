@@ -1,4 +1,4 @@
-import type { Npc, PartyMember, Token } from "../api/types";
+import type { Npc, PartyMember, SceneObject, Token } from "../api/types";
 import { hpRatio } from "./rules";
 import type { Selection } from "./store";
 import type { TokenVisual } from "./TokenNode";
@@ -14,13 +14,17 @@ export function tokenVisual(
   npcs: Record<string, Npc>,
   party: PartyMember[],
   selection: Selection,
+  objects: Record<string, SceneObject> = {},
 ): TokenVisual {
+  const container = token.container_id ? objects[token.container_id] : undefined;
   const base = {
     id: token.id,
     x: token.x,
     y: token.y,
     size: token.size,
     hidden: token.hidden,
+    concealed: Boolean(container?.hide_occupants),
+    rotation: token.rotation ?? 0,
     selected: selection?.tokenId === token.id,
   };
   if (token.npc_id) {

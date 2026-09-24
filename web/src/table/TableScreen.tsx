@@ -8,6 +8,8 @@ import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -26,6 +28,7 @@ import { SceneBar } from "./SceneBar";
 import { SceneDialog } from "./SceneDialog";
 import { useRoomSocket } from "./socket";
 import { useTable } from "./store";
+import { WorldPanel } from "./WorldPanel";
 
 const STATUS_LABEL = {
   connecting: { label: "Conectando…", color: "default" },
@@ -73,6 +76,7 @@ function Board({ room }: { room: Room }) {
   const onlinePlayers = useTable((s) => s.party.filter((p) => s.online[p.owner_id]).length);
   const partySize = useTable((s) => s.party.length);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [area, setArea] = useState<"table" | "world">("table");
   const statusInfo = STATUS_LABEL[status];
 
   return (
@@ -90,6 +94,16 @@ function Board({ room }: { room: Room }) {
           <Typography variant="body2" color="text.secondary" noWrap sx={{ display: { xs: "none", md: "block" } }}>
             {room.ruleset_name}
           </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={area}
+            onChange={(_, value: "table" | "world" | null) => value && setArea(value)}
+            sx={{ ml: 2 }}
+          >
+            <ToggleButton value="table">Mesa</ToggleButton>
+            <ToggleButton value="world">Mundo</ToggleButton>
+          </ToggleButtonGroup>
           <Box sx={{ flex: 1 }} />
           <Tooltip title={statusMessage ?? ""}>
             <Chip
@@ -118,6 +132,8 @@ function Board({ room }: { room: Room }) {
         <Box sx={{ flex: 1, display: "grid", placeItems: "center" }}>
           <CircularProgress />
         </Box>
+      ) : area === "world" ? (
+        <WorldPanel roomId={room.id} />
       ) : (
         <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "300px minmax(0, 1fr) 380px" }}>
           <Box sx={{ borderRight: 1, borderColor: "divider", minHeight: 0 }}>

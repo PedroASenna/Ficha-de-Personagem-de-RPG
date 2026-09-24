@@ -69,6 +69,92 @@ export interface Scene {
   grid_size: number;
   grid_visible: boolean;
   sort_order: number;
+  // Névoa de guerra: células de fog_cell px (fog_cols × fog_rows); fog_radius em casas da grade.
+  fog_enabled: boolean;
+  fog_radius: number;
+  fog_cols: number;
+  fog_rows: number;
+  fog_cell: number;
+}
+
+/** Peça de cenário: imagem posicionada pelo centro, com tamanho e rotação em graus (horário). */
+export interface SceneImage {
+  id: string;
+  scene_id: string;
+  image_key: string;
+  url: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z: number;
+  locked: boolean;
+  version: number;
+}
+
+/** Objeto que carrega bonecos (carroça, barco, jaula). */
+export interface SceneObject {
+  id: string;
+  scene_id: string;
+  name: string;
+  image_key: string | null;
+  url: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z: number;
+  hide_occupants: boolean;
+  version: number;
+}
+
+/** Exploração de um personagem numa cena: bits em base64 (1 = explorado), linha a linha. */
+export interface FogEntry {
+  scene_id: string;
+  character_id: string;
+  explored: string;
+}
+
+export type FactionKind = "nation" | "faction";
+export type RelationKind = "alliance" | "friendly" | "neutral" | "tense" | "war";
+
+export interface Faction {
+  id: string;
+  kind: FactionKind;
+  name: string;
+  emblem_key: string | null;
+  emblem_url: string | null;
+  color: string;
+  leader: string;
+  seat: string;
+  description: string;
+  secret_notes: string;
+  parent_id: string | null;
+  revealed: boolean;
+  sort_order: number;
+  version: number;
+}
+
+export interface Relation {
+  id: string;
+  a_id: string;
+  b_id: string;
+  kind: RelationKind;
+  note: string;
+  revealed: boolean;
+  version: number;
+}
+
+export interface World {
+  map_key: string | null;
+  map_url: string | null;
+  map_width: number | null;
+  map_height: number | null;
+  visible: boolean;
+  factions: Faction[];
+  relations: Relation[];
 }
 
 export type Condition = "ileso" | "ferido" | "muito_ferido" | "caido";
@@ -99,6 +185,8 @@ export interface Token {
   size: number;
   hidden: boolean;
   z: number;
+  rotation: number;
+  container_id: string | null;
   version: number;
 }
 
@@ -121,12 +209,16 @@ export interface MasterTable {
   scenes: Scene[];
   tokens: Token[];
   npcs: Npc[];
+  images: SceneImage[];
+  objects: SceneObject[];
+  fog: FogEntry[];
   party: PartyMember[];
+  world: World;
 }
 
 export interface SessionEvent {
   id: number;
-  type: "dice_roll" | "hp_change" | "join" | "leave" | "rest" | "system";
+  type: "dice_roll" | "hp_change" | "join" | "leave" | "rest" | "level_up" | "system";
   visibility: "public" | "master_only";
   actor_user_id: string | null;
   character_id: string | null;
@@ -144,6 +236,7 @@ export interface CharacterSheet {
   level: number;
   attributes: Record<string, number>;
   modifiers: Record<string, number>;
+  status: "draft" | "complete";
   hp_max: number;
   hp_current: number;
   hp_temp: number;

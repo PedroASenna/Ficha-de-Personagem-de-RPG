@@ -12,7 +12,7 @@ import Typography from "@mui/material/Typography";
 import { type FormEvent, useState } from "react";
 
 import type { Scene } from "../api/types";
-import { createScene, deleteScene, updateScene } from "./actions";
+import { createScene, deleteScene, resetFog, updateScene } from "./actions";
 import { ImagePicker } from "./ImagePicker";
 
 interface Props {
@@ -30,6 +30,8 @@ function SceneForm({ roomId, scene, onClose }: Props) {
   );
   const [grid, setGrid] = useState(scene?.grid_size ?? 70);
   const [gridVisible, setGridVisible] = useState(scene?.grid_visible ?? true);
+  const [fogEnabled, setFogEnabled] = useState(scene?.fog_enabled ?? false);
+  const [fogRadius, setFogRadius] = useState(scene?.fog_radius ?? 4);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
@@ -39,11 +41,20 @@ function SceneForm({ roomId, scene, onClose }: Props) {
       name: name.trim(),
       grid_size: grid,
       grid_visible: gridVisible,
+      fog_enabled: fogEnabled,
+      fog_radius: fogRadius,
       ...(map ? { map_key: map.key, map_width: map.width, map_height: map.height } : {}),
     };
     const saved = scene ? await updateScene(scene.id, body) : await createScene(roomId, body);
     setBusy(false);
     if (saved) onClose();
+  };
+
+  const coverAgain = async () => {
+    if (!scene || !window.confirm("Cobrir a cena inteira com névoa de novo? O que o grupo explorou será esquecido.")) {
+      return;
+    }
+    await resetFog(scene.id);
   };
 
   const remove = async () => {
@@ -97,6 +108,37 @@ function SceneForm({ roomId, scene, onClose }: Props) {
             control={<Switch checked={gridVisible} onChange={(e) => setGridVisible(e.target.checked)} />}
             label="Mostrar grade"
           />
+          <div>
+            <FormControlLabel
+              control={<Switch checked={fogEnabled} onChange={(e) => setFogEnabled(e.target.checked)} />}
+              label="Névoa de guerra"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              Cada jogador vê preto onde o personagem dele ainda não andou. Você vê o que ninguém explorou levemente
+              escurecido.
+            </Typography>
+            {fogEnabled && (
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center", mt: 1 }}>
+                <Typography variant="body2" sx={{ whiteSpace: "nowrap" }}>
+                  Visão: {fogRadius} {fogRadius === 1 ? "casa" : "casas"}
+                </Typography>
+                <Slider
+                  value={fogRadius}
+                  min={1}
+                  max={15}
+                  step={1}
+                  onChange={(_, value) => setFogRadius(value as number)}
+                  aria-label="Alcance da visão na névoa"
+                  sx={{ flex: 1 }}
+                />
+                {scene && (
+                  <Button size="small" onClick={() => void coverAgain()}>
+                    Cobrir tudo de novo
+                  </Button>
+                )}
+              </Stack>
+            )}
+          </div>
         </Stack>
       </DialogContent>
       <DialogActions>

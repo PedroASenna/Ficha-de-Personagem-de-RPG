@@ -1,12 +1,25 @@
 // Estado da mesa virtual do Mestre, montado a partir do "welcome" e atualizado pelos eventos do WebSocket.
 // Função pura: fácil de testar e de reaproveitar (o app dos jogadores tem um reducer irmão).
 
-import type { MasterTable, Npc, PartyMember, Room, RollTier, Scene, SessionEvent, Token } from "../api/types";
+import type {
+  MasterTable,
+  Npc,
+  PartyMember,
+  Room,
+  RollTier,
+  Scene,
+  SceneImage,
+  SceneObject,
+  SessionEvent,
+  Token,
+  World,
+} from "../api/types";
+import { byteLength, decodeBits, withCells } from "./fog";
 
 export interface LogEntry {
   id: string;
   ts: string;
-  kind: "roll" | "hp" | "join" | "system";
+  kind: "roll" | "hp" | "join" | "level" | "system";
   text: string;
   secret: boolean;
   tier?: RollTier;
@@ -19,6 +32,11 @@ export interface TableState {
   scenes: Scene[];
   tokens: Record<string, Token>;
   npcs: Record<string, Npc>;
+  images: Record<string, SceneImage>;
+  objects: Record<string, SceneObject>;
+  // Névoa: cena → personagem → bits explorados.
+  fog: Record<string, Record<string, Uint8Array>>;
+  world: World | null;
   party: PartyMember[];
   online: Record<string, boolean>;
   log: LogEntry[];
@@ -31,6 +49,10 @@ export const initialTableState: TableState = {
   scenes: [],
   tokens: {},
   npcs: {},
+  images: {},
+  objects: {},
+  fog: {},
+  world: null,
   party: [],
   online: {},
   log: [],
@@ -83,11 +105,35 @@ export type TableAction =
       roll: { total: number };
       outcome: { tier: RollTier };
     }
+  | { type: "image.upserted"; image: SceneImage }
+  | { type: "image.deleted"; image_id: string }
+  | {
+      type: "object.upserted";
+      object: SceneObject;
+      tokens: { token_id: string; x: number; y: number; version: number }[];
+    }
+  | { type: "object.deleted"; object_id: string }
+  | { type: "fog.revealed"; scene_id: string; character_id: string; cells: number[] }
+  | { type: "fog.reset"; scene_id: string; character_id: string | null }
+  | { type: "world.updated"; world: World }
+  | {
+      type: "character.leveled";
+      event_id: number;
+      ts: string;
+      character: { id: string; name: string };
+      level: number;
+      hp_current: number;
+      hp_max: number;
+      hp_temp: number;
+      version: number;
+      summary: string;
+    }
   | { type: "presence"; user_id: string; online: boolean }
   | { type: "party.updated"; party: PartyMember[] }
   | { type: "member.kicked"; user_id: string }
   | { type: "room.closed" }
-  | { type: "local/token.position"; token_id: string; x: number; y: number };
+  | { type: "local/token.position"; token_id: string; x: number; y: number }
+  | { type: "local/object.position"; object_id: string; x: number; y: number };
 
 function byOrder(a: Scene, b: Scene): number {
   return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
@@ -120,7 +166,9 @@ export function eventToLog(event: SessionEvent): LogEntry {
         ? "hp"
         : event.type === "join"
           ? "join"
-          : "system";
+          : event.type === "level_up"
+            ? "level"
+            : "system";
   const outcome = payload.outcome as { tier?: RollTier } | undefined;
   const roll = payload.roll as { total?: number } | undefined;
   return {
@@ -134,14 +182,30 @@ export function eventToLog(event: SessionEvent): LogEntry {
   };
 }
 
+function loadFog(entries: MasterTable["fog"]): TableState["fog"] {
+  const fog: TableState["fog"] = {};
+  for (const entry of entries) {
+    fog[entry.scene_id] = { ...fog[entry.scene_id], [entry.character_id]: decodeBits(entry.explored) };
+  }
+  return fog;
+}
+
 function loadTable(state: TableState, table: MasterTable): TableState {
   return {
     ...state,
     scenes: [...table.scenes].sort(byOrder),
     tokens: indexBy(table.tokens),
     npcs: indexBy(table.npcs),
+    images: indexBy(table.images ?? []),
+    objects: indexBy(table.objects ?? []),
+    fog: loadFog(table.fog ?? []),
+    world: table.world ?? null,
     party: table.party,
   };
+}
+
+function withoutScene<T extends { scene_id: string }>(record: Record<string, T>, sceneId: string): Record<string, T> {
+  return Object.fromEntries(Object.entries(record).filter(([, item]) => item.scene_id !== sceneId));
 }
 
 export function tableReducer(state: TableState, action: TableAction): TableState {
@@ -157,10 +221,15 @@ export function tableReducer(state: TableState, action: TableAction): TableState
       const others = state.scenes.filter((s) => s.id !== action.scene.id);
       return { ...state, scenes: [...others, action.scene].sort(byOrder) };
     }
-    case "scene.deleted": {
-      const tokens = Object.fromEntries(Object.entries(state.tokens).filter(([, t]) => t.scene_id !== action.scene_id));
-      return { ...state, scenes: state.scenes.filter((s) => s.id !== action.scene_id), tokens };
-    }
+    case "scene.deleted":
+      return {
+        ...state,
+        scenes: state.scenes.filter((s) => s.id !== action.scene_id),
+        tokens: withoutScene(state.tokens, action.scene_id),
+        images: withoutScene(state.images, action.scene_id),
+        objects: withoutScene(state.objects, action.scene_id),
+        fog: withoutKey(state.fog, action.scene_id),
+      };
     case "token.upserted":
       return { ...state, tokens: { ...state.tokens, [action.token.id]: action.token } };
     case "token.moved": {
@@ -178,6 +247,83 @@ export function tableReducer(state: TableState, action: TableAction): TableState
     }
     case "token.deleted":
       return { ...state, tokens: withoutKey(state.tokens, action.token_id) };
+    case "image.upserted": {
+      const current = state.images[action.image.id];
+      if (current && action.image.version < current.version) return state;
+      return { ...state, images: { ...state.images, [action.image.id]: action.image } };
+    }
+    case "image.deleted":
+      return { ...state, images: withoutKey(state.images, action.image_id) };
+    case "object.upserted": {
+      const current = state.objects[action.object.id];
+      const objects =
+        current && action.object.version < current.version
+          ? state.objects
+          : { ...state.objects, [action.object.id]: action.object };
+      let tokens = state.tokens;
+      for (const moved of action.tokens) {
+        const token = tokens[moved.token_id];
+        if (token && moved.version >= token.version) {
+          tokens = { ...tokens, [token.id]: { ...token, x: moved.x, y: moved.y, version: moved.version } };
+        }
+      }
+      return objects === state.objects && tokens === state.tokens ? state : { ...state, objects, tokens };
+    }
+    case "local/object.position": {
+      const obj = state.objects[action.object_id];
+      if (!obj) return state;
+      const dx = action.x - obj.x;
+      const dy = action.y - obj.y;
+      const tokens = { ...state.tokens };
+      for (const token of Object.values(state.tokens)) {
+        if (token.container_id === obj.id) tokens[token.id] = { ...token, x: token.x + dx, y: token.y + dy };
+      }
+      return { ...state, tokens, objects: { ...state.objects, [obj.id]: { ...obj, x: action.x, y: action.y } } };
+    }
+    case "object.deleted": {
+      const tokens = { ...state.tokens };
+      for (const token of Object.values(state.tokens)) {
+        if (token.container_id === action.object_id) tokens[token.id] = { ...token, container_id: null };
+      }
+      return { ...state, tokens, objects: withoutKey(state.objects, action.object_id) };
+    }
+    case "fog.revealed": {
+      const scene = state.scenes.find((s) => s.id === action.scene_id);
+      if (!scene) return state;
+      const sceneFog = state.fog[action.scene_id] ?? {};
+      const bits = withCells(sceneFog[action.character_id], action.cells, byteLength(scene));
+      return { ...state, fog: { ...state.fog, [action.scene_id]: { ...sceneFog, [action.character_id]: bits } } };
+    }
+    case "fog.reset": {
+      if (action.character_id === null) return { ...state, fog: withoutKey(state.fog, action.scene_id) };
+      const sceneFog = state.fog[action.scene_id];
+      if (!sceneFog) return state;
+      return { ...state, fog: { ...state.fog, [action.scene_id]: withoutKey(sceneFog, action.character_id) } };
+    }
+    case "world.updated":
+      return { ...state, world: action.world };
+    case "character.leveled": {
+      const party = state.party.map((p) =>
+        p.id === action.character.id
+          ? {
+              ...p,
+              level: action.level,
+              hp_current: action.hp_current,
+              hp_max: action.hp_max,
+              hp_temp: action.hp_temp,
+              version: action.version,
+            }
+          : p,
+      );
+      const entry: LogEntry = {
+        id: String(action.event_id),
+        ts: action.ts,
+        kind: "level",
+        text: action.summary,
+        secret: false,
+      };
+      return { ...state, party, log: appendLog(state, entry) };
+    }
     case "npc.upserted":
       return { ...state, npcs: { ...state.npcs, [action.npc.id]: action.npc } };
     case "npc.deleted": {
@@ -271,6 +417,21 @@ export function characterScenes(state: TableState): Record<string, string> {
     if (token.character_id) result[token.character_id] = token.scene_id;
   }
   return result;
+}
+
+/** Peças de cenário da cena, de baixo para cima. */
+export function sceneImages(state: TableState, sceneId: string | null): SceneImage[] {
+  if (!sceneId) return [];
+  return Object.values(state.images)
+    .filter((i) => i.scene_id === sceneId)
+    .sort((a, b) => a.z - b.z);
+}
+
+export function sceneObjects(state: TableState, sceneId: string | null): SceneObject[] {
+  if (!sceneId) return [];
+  return Object.values(state.objects)
+    .filter((o) => o.scene_id === sceneId)
+    .sort((a, b) => a.z - b.z);
 }
 
 export function npcTokenCount(state: TableState): Record<string, number> {

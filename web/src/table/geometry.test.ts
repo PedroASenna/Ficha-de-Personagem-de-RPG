@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { fitView, gridLines, mapToScreen, screenToMap, snapPoint, snapToGrid, tokenRadius, zoomAt } from "./geometry";
+import {
+  containerAt,
+  fitView,
+  gridLines,
+  mapToScreen,
+  normalizeAngle,
+  pointInRotatedRect,
+  screenToMap,
+  snapPoint,
+  snapToGrid,
+  tokenRadius,
+  zoomAt,
+} from "./geometry";
 
 describe("grade", () => {
   it("encaixa bonecos de tamanho ímpar no centro da casa", () => {
@@ -60,5 +72,30 @@ describe("tela ↔ mapa", () => {
     expect(fit.scale).toBeCloseTo(0.5);
     expect(fit.x).toBeCloseTo(24);
     expect(fit.y).toBeCloseTo((1048 - 500) / 2);
+  });
+});
+
+describe("objetos girados", () => {
+  const cart = { id: "cart", x: 100, y: 100, width: 200, height: 40, rotation: 0, z: 0 };
+
+  it("acha o ponto dentro do retângulo, girado ou não", () => {
+    expect(pointInRotatedRect({ x: 190, y: 110 }, cart)).toBe(true);
+    expect(pointInRotatedRect({ x: 100, y: 190 }, cart)).toBe(false);
+    const standing = { ...cart, rotation: 90 };
+    expect(pointInRotatedRect({ x: 100, y: 190 }, standing)).toBe(true);
+    expect(pointInRotatedRect({ x: 190, y: 110 }, standing)).toBe(false);
+  });
+
+  it("o objeto de cima ganha quando há vários", () => {
+    const cage = { ...cart, id: "cage", width: 60, height: 60, z: 3 };
+    expect(containerAt({ x: 100, y: 100 }, [cart, cage])?.id).toBe("cage");
+    expect(containerAt({ x: 180, y: 100 }, [cart, cage])?.id).toBe("cart");
+    expect(containerAt({ x: 500, y: 500 }, [cart, cage])).toBeNull();
+  });
+
+  it("normaliza ângulos", () => {
+    expect(normalizeAngle(190)).toBe(-170);
+    expect(normalizeAngle(-190)).toBe(170);
+    expect(normalizeAngle(720.04)).toBe(0);
   });
 });

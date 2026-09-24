@@ -2,6 +2,7 @@ import CasinoIcon from "@mui/icons-material/Casino";
 import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import LockIcon from "@mui/icons-material/LockOutlined";
+import UpgradeIcon from "@mui/icons-material/Upgrade";
 import ShieldIcon from "@mui/icons-material/Shield";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -19,12 +20,16 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { api } from "../api/client";
 import type { CharacterSheet, Npc, PartyMember, Token } from "../api/types";
 import { toast } from "../toasts";
 import { deleteNpc, removeToken, updateToken } from "./actions";
+import { LevelUpDialog } from "./LevelUpDialog";
 import { NpcDialog } from "./NpcDialog";
+import { RotationControl } from "./RotationControl";
+import { ObjectPanel, PiecesPanel } from "./SelectionPanels";
 import { type RulesetAttribute, useRuleset } from "./ruleset";
 import { abilityModifier, checkNotation, CONDITION_COLOR, formatModifier, hpColor, hpRatio } from "./rules";
 import { type ClientMessage, newRequestId, useTable } from "./store";
@@ -190,8 +195,21 @@ function RollBox({ target, secretByDefault }: { target: Target; secretByDefault:
 
 function TokenControls({ token }: { token: Token }) {
   const scenes = useTable((s) => s.scenes);
+  const container = useTable((s) => (token.container_id ? s.objects[token.container_id] : undefined));
+  const dispatch = useTable((s) => s.dispatch);
   return (
     <Section title="No mapa">
+      {container && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Dentro de <b>{container.name}</b>
+            {container.hide_occupants ? " (oculto dos outros jogadores)" : ""}
+          </Typography>
+          <Button size="small" onClick={() => void updateToken(token.id, { container_id: null })}>
+            Sair
+          </Button>
+        </Stack>
+      )}
       <FormControlLabel
         control={
           <Switch checked={!token.hidden} onChange={(e) => void updateToken(token.id, { hidden: !e.target.checked })} />
@@ -228,6 +246,14 @@ function TokenControls({ token }: { token: Token }) {
           ))}
         </TextField>
       </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+        Ângulo do retrato
+      </Typography>
+      <RotationControl
+        value={token.rotation ?? 0}
+        onChange={(rotation) => dispatch({ type: "token.upserted", token: { ...token, rotation } })}
+        onCommit={(rotation) => void updateToken(token.id, { rotation })}
+      />
       <Button size="small" color="error" sx={{ mt: 1 }} onClick={() => void removeToken(token.id)}>
         Tirar do mapa
       </Button>
@@ -246,6 +272,7 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
     placeholderData: (previous) => previous,
   });
   const data = sheet.data;
+  const [leveling, setLeveling] = useState(false);
   const roll = (attr: RulesetAttribute, score: number) =>
     sendOrWarn({
       type: "roll.request",
@@ -278,7 +305,23 @@ function CharacterDetail({ member, token }: { member: PartyMember; token: Token 
             </Typography>
           )}
         </Box>
+        {data?.status === "complete" && ruleset.data && (
+          <Tooltip title="Subir de nível">
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<UpgradeIcon />}
+              onClick={() => setLeveling(true)}
+              sx={{ ml: "auto", flexShrink: 0 }}
+            >
+              Nível
+            </Button>
+          </Tooltip>
+        )}
       </Stack>
+      {leveling && data && ruleset.data && room && (
+        <LevelUpDialog roomId={room.id} sheet={data} pack={ruleset.data} onClose={() => setLeveling(false)} />
+      )}
       <Box sx={{ mt: 2 }}>
         <HpBlock current={member.hp_current} max={member.hp_max} temp={member.hp_temp} />
         <HpControls target={{ character_id: member.id }} />
@@ -441,6 +484,14 @@ function NpcDetail({ npc, token }: { npc: Npc; token: Token | null }) {
 }
 
 export function DetailPanel() {
+  const pieces = useTable(useShallow((s) => s.selectedImages.map((id) => s.images[id]).filter((p) => p !== undefined)));
+  const selectedObject = useTable((s) => (s.selectedObject ? s.objects[s.selectedObject] : undefined));
+  if (pieces.length > 0) return <PiecesPanel pieces={pieces} />;
+  if (selectedObject) return <ObjectPanel key={selectedObject.id} obj={selectedObject} />;
+  return <TokenDetailPanel />;
+}
+
+function TokenDetailPanel() {
   const selection = useTable((s) => s.selection);
   const npc = useTable((s) => (s.selection?.kind === "npc" ? s.npcs[s.selection.id] : undefined));
   const member = useTable((s) =>
