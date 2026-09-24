@@ -12,7 +12,7 @@ Para caber num app distribuído (mesmo que só como APK para o grupo), a licenç
 |---|---|---|---|---|
 | **5ª Edição, SRD 5.1** (2014) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) | ✅ Sim | **Disponível** (`srd-5.1`) | Exige atribuição (texto no pacote, exibido no app). CC-BY não licencia marcas: usar "compatível com a 5ª edição", nunca "D&D" como nome. |
 | **5ª Edição 2024, SRD 5.2.1** | CC-BY-4.0 | ✅ Sim | **Disponível** (`srd-5.2`) | Publicado em 22/04/2025. Wizards declarou que SRDs futuros também sairão em CC-BY-4.0, e a licença é irrevogável. |
-| **Genérico / homebrew** | Original | ✅ Sim | **Disponível** (`generico`) | Texto livre para raça/classe/antecedente. Serve de "ficha em branco" para sistemas cuja licença não permite regras em apps. |
+| **Genérico / homebrew** | Original | ✅ Sim | **Disponível** (`generico`) | Raça e origem digitadas pelo jogador, com os pontos de atributo de cada uma; classe da lista ou em texto livre. Serve de "ficha em branco" para sistemas cuja licença não permite regras em apps. |
 | **Old Dragon 2** (SRD) | CC-BY-SA-4.0 | ✅ Sim | Planejado | SRD aberto e irrevogável, com uso comercial. O *share-alike* se aplica ao **pacote de dados** (JSON), não ao código do app, se mantido separado. Sistema brasileiro: próximo da fila. |
 | **Pathfinder 2e Remaster** | ORC | ✅ Sim | Planejado | Regras sob ORC. Nomes, marcas e cenário são *Reserved Material*: não podem aparecer como nome do sistema no app. |
 | **Basic Roleplaying** (d100) | ORC | ✅ Sim | Planejado | Percentual *roll-under*: usa `direction: "low"` na classificação dos dados (já suportado). Conteúdo de Call of Cthulhu é proibido. |
@@ -40,7 +40,8 @@ Os pacotes trazem só o **necessário para criar o personagem rápido**, com des
 
 - **srd-5.1**: 9 raças (a sub-raça que o SRD inclui: Anão da Colina, Alto Elfo, Halfling Pés-Leves, Gnomo das Rochas, mais Humano, Draconato, Meio-Elfo, Meio-Orc, Tiferino), 12 classes, antecedente Acólito, arranjo padrão / compra de 27 pontos / 4d6kh3.
 - **srd-5.2**: 9 espécies (inclui Golias e Orc), 12 classes, 4 antecedentes (Acólito, Criminoso, Sábio, Soldado) com bônus +2/+1 ou +1/+1/+1.
-- **generico**: 6 atributos neutros, 4 arquétipos para a geração automática, texto livre para o resto.
+- **generico**: 6 atributos neutros, 4 arquétipos para a geração automática. **Raça e origem são obrigatórias e digitadas**, cada uma com pontos de atributo à mão (de -5 a +5 por atributo, `custom_bonus`). Ao subir de nível, o jogador informa os PV ganhos e soma até 10 pontos de atributo (`level_up.free_points`), até o nível 30.
+- **srd-5.1 / srd-5.2**: ao subir de nível, os PV vêm da classe (dado cheio no 1º nível, média fixa depois) e os níveis 4, 8, 12, 16 e 19 dão +2 em atributos (ou nada, para quem pega um talento), sem passar de 20.
 
 > 🔎 Os dados foram digitados a partir do conhecimento dos SRDs. **Confira contra o documento oficial antes do lançamento**, principalmente bônus, deslocamento, dados de vida e espaços de magia do nível 1.
 
@@ -52,6 +53,10 @@ Os pacotes trazem só o **necessário para criar o personagem rápido**, com des
    - `hp.strategy`: `hit_die_max_plus_mod` · `fixed` · `manual`
    - `carry.strategy`: `attribute_multiplier` · `fixed`
    - `background_bonus.strategy`: `none` · `plus2_plus1`
+   - `custom_bonus` (`{min, max}`) com `allow_custom`: pontos de atributo digitados para raça/antecedente personalizados
+   - `custom_required`: `ancestry`/`background` obrigatórios mesmo sem lista de opções (o jogador digita)
+   - `ancestry_label` / `background_label`: como o app chama cada passo (Raça, Espécie, Origem, Antecedente…)
+   - `level_up`: `max_level`, `asi_levels` + `asi_points` + `attribute_max` (pontos em níveis fixos) ou `free_points` (livre)
    - `dice`: `crit_rules` (faces de crítico por tipo de dado), `direction` (`high`/`low` para roll-under), `generic_crits`
 3. Remova a entrada correspondente de `catalog.json`. O loader recusa o mesmo id nos dois lugares.
 4. `pytest` valida o pacote. No startup, `sync_rulesets` faz upsert na tabela `rulesets`.

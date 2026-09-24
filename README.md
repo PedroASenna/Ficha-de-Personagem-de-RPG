@@ -5,8 +5,11 @@
 RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
 
 - **Personagem jogável em um toque** (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico) e **HUD de combate** com barra de PV que sangra e brilha.
-- **Mesa virtual do Mestre:** mapas importados em **cenas** (troca quando o grupo se separa), bonecos com a imagem dos personagens e **inimigos criados na hora**. Clicar num boneco mostra **os atributos em tempo real**, com dano, cura e rolagens secretas.
+- **Mesa virtual do Mestre:** mapas importados em **cenas** (troca quando o grupo se separa), **várias imagens de cenário na mesma cena** (mover, girar e redimensionar, uma ou várias de uma vez), **objetos que carregam** bonecos (carroça, barco, jaula), bonecos com a imagem dos personagens e **inimigos criados na hora**. Clicar num boneco mostra **os atributos em tempo real**, com dano, cura, rolagens secretas e **subir de nível**.
+- **Névoa de guerra:** cada jogador vê preto onde o personagem dele ainda não andou; o Mestre vê o inexplorado levemente escurecido.
+- **Mapa-múndi** com fichas de **nações e facções**, relações entre elas e o que o grupo já descobriu.
 - **No celular, o jogador vê o mapa da cena onde está**, com os bonecos andando ao vivo. Dos inimigos, vê só nome, imagem e se estão **Ilesos, Feridos, Muito feridos ou Caídos**.
+- **Sistema genérico** com raça e origem digitadas e pontos de atributo à mão; **ângulo ajustável** em toda imagem enviada.
 - **Contas locais** (usuário e senha no servidor) e **campanhas salvas**: arquivar e reabrir de onde parou.
 
 | Peça | Instalador | Tecnologia |
@@ -85,20 +88,21 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 
 ## Verificação feita
 
-- **Servidor:** 114 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+- **Servidor:** 136 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
   - contas locais e admin;
   - descoberta HTTP e UDP;
   - campanhas arquivadas e reabertas;
   - permissões da mesa;
   - WebSocket com três conexões (o `token.move` só chega a quem está na cena, a separação do grupo gera `view.reset`, o dano em inimigo manda números só ao Mestre);
-  - backup e restauração, inclusive recusando tar malicioso.
+  - backup e restauração, inclusive recusando tar malicioso;
+  - 0.3: várias peças de cenário com rotação (e o arquivo só apagado quando a última peça sai), objetos levando e girando os ocupantes e escondendo quem está dentro, névoa só com a exploração de cada jogador (caminho explorado, reset, grade nova descarta), rotação em todo envio de imagem, mapa-múndi revelado aos poucos sem notas secretas, subir de nível (5ª edição e genérico) e raça/origem digitadas com pontos.
 
-  `ruff` e `black` limpos. A migração 0002 passa por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados. O smoke test ponta a ponta passou.
+  `ruff` e `black` limpos. As migrações 0002 e 0003 passam por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados.
 - **Pacote `.deb` do servidor:** gerado aqui com Python portátil (exige glibc ≥ 2.28) e instalado com `dpkg`, rodando como o usuário `rpgplay`. Funcionaram:
   - `/health`, `/mestre`, descoberta por **broadcast UDP** e smoke test;
   - `reset-password`, `backup` e `restore` pelo comando `rpgplay-server`;
   - atualização mantendo o `server.env`, `remove` mantendo as campanhas e `purge` apagando tudo.
-- **Painel do Mestre:** 34 testes Vitest. Um teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável empacotado:
+- **Painel do Mestre:** 44 testes Vitest. Um teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
   - criar conta e mesa;
   - enviar um mapa;
   - receber a jogadora ao vivo;
@@ -107,7 +111,12 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - aplicar dano (a jogadora só vê "Muito ferido");
   - rolar dados;
   - separar o grupo em outra cena;
-  - mostrar o QR code.
+  - mostrar o QR code;
+  - enviar duas imagens de cenário de uma vez, uma girada no envio, e girar as duas juntas;
+  - criar uma carroça, soltar a personagem dentro e arrastar a carroça (ela vai junto);
+  - ligar a névoa (a jogadora passa a receber a própria exploração);
+  - subir a personagem de nível pela mesa;
+  - criar e revelar uma nação e liberar o mapa-múndi (sem as notas secretas).
 - **Programa do Mestre:** 8 testes Vitest e um Playwright + Electron que roda contra o código **e** contra o `.deb` instalado:
   - acha o servidor sozinho por UDP;
   - isola o painel;
@@ -116,7 +125,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - aceita o IP digitado.
 
   O `.exe` (NSIS) foi gerado aqui com wine, com ícone e metadados conferidos.
-- **App:** 94 testes Jest (descoberta e QR, reducer e geometria do mapa, renderização da cena, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
+- **App:** 105 testes Jest (descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
 - **Não verificado aqui:**
   - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
   - o `.exe` não rodou num **Windows de verdade**;
@@ -126,6 +135,6 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 ## Próximos passos sugeridos
 
 1. Testar numa sessão real: instalar o servidor, o `.exe` e o APK e jogar uma cena com o grupo.
-2. Névoa de guerra e régua de distância no mapa; iniciativa (ordem de turno) no painel.
+2. Régua de distância no mapa; iniciativa (ordem de turno) no painel; paredes que bloqueiam a visão na névoa.
 3. Anunciar o servidor por mDNS (`rpgplay.local`) para quem não quer IP fixo.
 4. Pacote **Old Dragon 2** (CC-BY-SA, pt-BR) e dados Fudge/paradas de d6 para Fate, Year Zero e Forged in the Dark.

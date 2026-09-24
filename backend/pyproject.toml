@@ -1,6 +1,6 @@
 [project]
 name = "rpg-play-api"
-version = "0.2.1"
+version = "0.3.0"
 description = "Servidor RPG Play: fichas, mesas do Mestre, mapas e rolagem de dados em tempo real na rede local"
 requires-python = ">=3.11"
 dependencies = [

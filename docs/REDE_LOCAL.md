@@ -46,9 +46,10 @@ A premissa é **uma rede doméstica confiável**, sem exposição à internet.
 - **Contas:** senha com Argon2id, JWT de acesso de 60 min e refresh token de uso único (rotação), guardado só como hash. No celular, os tokens ficam no Android Keystore (`expo-secure-store`).
 - **Segredo JWT gerado no primeiro uso** (`/var/lib/rpgplay/jwt_secret`, permissão 600). Em produção o servidor recusa subir com o segredo de desenvolvimento.
 - **Cadastro:** aberto por padrão. A primeira conta vira admin. Depois que o grupo entrou, feche com `RPG_ALLOW_REGISTRATION=false`.
-- **WebSocket:** o token vai na primeira mensagem, nunca na URL. Cada evento é filtrado por quem pode ver: o Mestre recebe tudo; o jogador recebe só a cena do seu boneco, nunca bonecos escondidos e, dos inimigos, só nome, imagem e estado vago (`Ileso`, `Ferido`, `Muito ferido`, `Caído`). O PV numérico dos inimigos e as rolagens secretas ficam só com o Mestre.
-- **Permissões da mesa:** só o Mestre cria cenas e inimigos, envia mapas e move bonecos (REST e `token.move`). Jogadores só alteram o PV do próprio personagem.
-- **Uploads:** mapa até 20 MB (reduzido a 4096 px no maior lado) e retrato até 5 MB (512 px). Reencode em JPEG sem EXIF/GPS, proteção contra *decompression bomb*, e a imagem só pode ser usada na mesa para a qual foi enviada.
+- **WebSocket:** o token vai na primeira mensagem, nunca na URL. Cada evento é filtrado por quem pode ver: o Mestre recebe tudo; o jogador recebe só a cena do seu boneco, nunca bonecos escondidos (nem quem está num objeto com ocupantes ocultos, exceto ele mesmo) e, dos inimigos, só nome, imagem e estado vago (`Ileso`, `Ferido`, `Muito ferido`, `Caído`). O PV numérico dos inimigos e as rolagens secretas ficam só com o Mestre.
+- **Névoa e mundo:** cada jogador recebe só a exploração do **próprio** personagem. Do mapa-múndi, só a imagem liberada e as nações/facções/relações reveladas, **sem as notas secretas**. (A névoa esconde o mapa na tela; bonecos visíveis da cena ainda chegam ao app, como numa mesa física com o mapa coberto.)
+- **Permissões da mesa:** só o Mestre cria cenas, peças de cenário, objetos e inimigos, envia imagens, move bonecos e objetos (REST, `token.move` e `object.move`), mexe na névoa e no mapa-múndi. Jogadores alteram o PV do próprio personagem e sobem o nível dele (o Mestre também pode, pela mesa).
+- **Uploads:** mapa até 20 MB (reduzido a 4096 px no maior lado), peça de cenário até 20 MB (2048 px, PNG quando tem transparência), brasão (512 px) e retrato até 5 MB (512 px). Qualquer imagem pode ser girada no envio (`rotation`). Reencode sem EXIF/GPS, proteção contra *decompression bomb*, e a imagem só pode ser usada na mesa para a qual foi enviada.
 - **Limites de frequência** em login, PIN, rolagens, dano/cura, uploads e movimentos de bonecos (o arrasto manda ~10 posições/s; o excesso é descartado e a posição final chega pelo "soltar").
 - **Serviço systemd endurecido:** usuário próprio `rpgplay`, sistema de arquivos somente leitura exceto `/var/lib/rpgplay`, sem novas capacidades, `PrivateTmp`, `ProtectHome`, sem acesso a dispositivos.
 - **Programa do Mestre (Electron):** `contextIsolation` + `sandbox`, sem Node na página. A ponte com o processo principal existe só na tela local de escolha do servidor, e o processo principal confere quem chama. A navegação fica presa à origem do servidor escolhido, links externos abrem no navegador e permissões (câmera, microfone, localização) são negadas.
@@ -58,7 +59,7 @@ A premissa é **uma rede doméstica confiável**, sem exposição à internet.
 | O quê | Onde (servidor instalado por .deb) |
 |---|---|
 | Banco (SQLite, modo WAL) | `/var/lib/rpgplay/rpgplay.db` |
-| Mapas, retratos | `/var/lib/rpgplay/media/` |
+| Mapas, peças de cenário, brasões, retratos | `/var/lib/rpgplay/media/` |
 | Segredo JWT, id do servidor | `/var/lib/rpgplay/jwt_secret`, `/var/lib/rpgplay/server_id` |
 | Configuração | `/etc/rpgplay/server.env` |
 | Programa | `/opt/rpgplay-server/` (Python embutido; não usa o Python do sistema) |

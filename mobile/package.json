@@ -1,6 +1,6 @@
 {
   "name": "rpg-play",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

@@ -6,13 +6,13 @@ const config: ExpoConfig = {
   name: 'RPG Play',
   slug: 'rpg-play',
   scheme: 'rpgplay',
-  version: '0.2.1',
+  version: '0.3.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   android: {
     package: 'com.pedroasenna.rpgplay',
-    versionCode: 3,
+    versionCode: 4,
     adaptiveIcon: {
       backgroundColor: '#15111A',
       foregroundImage: './assets/android-icon-foreground.png',

@@ -89,7 +89,15 @@ erDiagram
   ROOMS ||--o{ SESSION_EVENTS : "log"
   ROOMS ||--o{ SCENES : "cenas"
   ROOMS ||--o{ NPCS : "inimigos"
+  ROOMS ||--o{ FACTIONS : "nações e facções"
+  FACTIONS ||--o{ FACTION_RELATIONS : "relações"
+  FACTIONS |o--o{ FACTIONS : "facção dentro de nação"
   SCENES ||--o{ TOKENS : "bonecos"
+  SCENES ||--o{ SCENE_IMAGES : "peças de cenário"
+  SCENES ||--o{ SCENE_OBJECTS : "objetos"
+  SCENE_OBJECTS |o--o{ TOKENS : "leva dentro"
+  SCENES ||--o{ FOG_EXPLORED : "névoa"
+  CHARACTERS ||--o{ FOG_EXPLORED : "explorou"
   CHARACTERS |o--o{ TOKENS : "boneco do personagem"
   NPCS |o--o{ TOKENS : "boneco do inimigo"
   CHARACTERS ||--o{ INVENTORY_ITEMS : ""
@@ -112,6 +120,8 @@ erDiagram
     string ruleset_id FK
     string status "open | closed (arquivada)"
     timestamptz last_activity_at
+    string world_map_key "mapa-múndi"
+    bool world_visible "jogadores veem a imagem"
   }
   SCENES {
     uuid id PK
@@ -123,6 +133,64 @@ erDiagram
     int grid_size
     bool grid_visible
     int sort_order
+    bool fog_enabled
+    int fog_radius "em casas da grade"
+  }
+  SCENE_IMAGES {
+    uuid id PK
+    uuid scene_id FK
+    string image_key "rooms/{room}/piece/... (PNG com transparência)"
+    float x "centro"
+    float y
+    float width
+    float height
+    float rotation "graus, horário"
+    int z
+    bool locked
+    int version
+  }
+  SCENE_OBJECTS {
+    uuid id PK
+    uuid scene_id FK
+    string name "Carroça, Barco, Jaula"
+    string image_key
+    float x
+    float y
+    float width
+    float height
+    float rotation
+    bool hide_occupants
+    int version
+  }
+  FOG_EXPLORED {
+    uuid scene_id PK
+    uuid character_id PK
+    int cols
+    int rows
+    float cell "px do mapa por célula"
+    bytes data "1 bit por célula"
+  }
+  FACTIONS {
+    uuid id PK
+    uuid room_id FK
+    string kind "nation | faction"
+    string name
+    string emblem_key
+    string color
+    string leader
+    string seat "capital ou sede"
+    text description "pública"
+    text secret_notes "só o Mestre"
+    uuid parent_id FK "nação"
+    bool revealed
+  }
+  FACTION_RELATIONS {
+    uuid id PK
+    uuid a_id FK "a_id < b_id"
+    uuid b_id FK
+    string kind "alliance | friendly | neutral | tense | war"
+    string note
+    bool revealed
   }
   NPCS {
     uuid id PK
@@ -148,13 +216,18 @@ erDiagram
     float size "em casas da grade"
     bool hidden
     int z
+    float rotation "ângulo do retrato"
+    uuid container_id FK "dentro de um objeto"
     int version
   }
   CHARACTERS {
     uuid id PK
     uuid owner_id FK
     string ruleset_id FK
-    json attributes
+    int level
+    json attributes "base + raça/antecedente + níveis"
+    json ancestry_bonus "pontos à mão (genérico)"
+    json attribute_audit "base, bônus, rolagens, subidas de nível"
     int hp_max
     int hp_current
     int hp_temp
@@ -175,6 +248,11 @@ Decisões:
 - **Enums como `VARCHAR`**, e **`JSONB` no Postgres / `JSON` no SQLite.** A migração 0002 usa `batch_alter_table` para funcionar nos dois, e o CI roda `upgrade → check → downgrade → upgrade` em ambos.
 - **Campanhas persistentes:** mesas não expiram mais. `closed` = arquivada (dá para reabrir; se o PIN antigo estiver em uso, ganha outro). O expurgo diário apaga campanhas sem atividade há `RPG_ROOM_RETENTION_DAYS` (365 por padrão) e o log com mais de 90 dias.
 - **`version`** em personagens, inimigos e bonecos: `hp.change` com versão antiga devolve conflito, e `token.moved` com versão antiga é ignorado pelos clientes (eco atrasado do arrasto).
+- **Peças de cenário** (`scene_images`) ficam por baixo da grade e dos bonecos, sobre o mapa de fundo da cena. A imagem é enviada uma vez; peças duplicadas reaproveitam o arquivo, que só é apagado quando nenhuma peça, objeto, cena, inimigo, facção ou mapa-múndi aponta mais para ele.
+- **Objetos que carregam** guardam os ocupantes em `tokens.container_id` com posição **absoluta**. Mover ou girar o objeto aplica o mesmo deslocamento/giro (em volta do centro) a cada ocupante, no servidor. Soltar um boneco em cima de um objeto (no painel) coloca dentro; soltar fora tira. Mudar de cena tira do objeto.
+- **Quem o jogador vê** (`services/table.py::token_visible`): bonecos escondidos, nunca; dentro de objeto com `hide_occupants`, só o próprio boneco.
+- **Névoa de guerra** (`services/fog.py`): a cena vira uma grade de células de meia casa (no máximo 256 por lado). Cada personagem tem um mapa de bits por cena; cada movimento do boneco (arrasto, soltar, colocar, ir junto num objeto) marca tudo a até `fog_radius` casas do **caminho**. Inimigos não exploram. A exploração é gravada mesmo com a névoa desligada, então ligar no meio da sessão já mostra por onde o grupo passou. Mudar o tamanho do mapa ou da grade descarta a exploração (não se encaixa mais).
+- **Nível:** `attribute_audit.advancement` soma os pontos ganhos ao subir de nível por cima de base + raça/antecedente; `level_ups` guarda o histórico. Na 5ª edição os PV vêm da classe (média fixa por nível) e o +2 só nos níveis 4, 8, 12, 16 e 19 (até 20); no genérico o jogador informa os PV e soma até 10 pontos por nível.
 
 ## Fluxo: o Mestre move um inimigo
 
@@ -216,12 +294,18 @@ sequenceDiagram
 | C→S | `ping` | resposta `pong` (keepalive a cada 25 s) |
 | C→S | `roll.request` | `id`, `notation`, `character_id?` ou `npc_id?` (só o Mestre), `label?`, `visibility: public\|master_only` |
 | C→S | `hp.change` | `character_id` ou `npc_id` (só o Mestre), `delta`, `kind: damage\|heal\|temp`, `expected_version?` |
-| C→S | `token.move` | `token_id`, `x`, `y` (só o Mestre) |
+| C→S | `token.move` | `token_id`, `x`, `y` (só o Mestre). Personagens exploram a névoa pelo caminho |
+| C→S | `object.move` | `object_id`, `x`, `y`, `rotation?` (só o Mestre). Os ocupantes andam junto |
 | S→C | `welcome` | `room`, `log` (últimos 50 eventos visíveis), `table` (visão do Mestre ou do jogador) |
 | S→C | `roll.result` · `hp.changed` | resultado com `effect` para a animação e `summary` para o log |
 | S→C | `scene.upserted/deleted` · `token.upserted/moved/deleted` · `npc.upserted/deleted` | mesa virtual, filtrada por cena e por papel |
 | S→C | `npc.hp.changed` | só para o Mestre (números + log secreto). Os jogadores recebem `npc.upserted` com o estado novo |
-| S→C | `view.reset` | a cena do jogador mudou: vem a visão inteira da cena nova |
+| S→C | `image.upserted/deleted` | peças de cenário da cena |
+| S→C | `object.upserted/deleted` | objeto e, em `tokens`, os ocupantes que andaram junto (cada jogador recebe só os que vê) |
+| S→C | `fog.revealed` · `fog.reset` | células recém-exploradas. O Mestre recebe de todos; o jogador, só as do próprio personagem e só com a névoa ligada |
+| S→C | `world.updated` | mapa-múndi, nações, facções e relações. O Mestre recebe tudo; os jogadores, só o revelado (sem notas secretas) |
+| S→C | `character.leveled` | alguém subiu de nível (nível, PV, pontos e o texto do log) |
+| S→C | `view.reset` | a visão do jogador mudou (outra cena, névoa ligada, ocupantes escondidos...): vem a visão inteira |
 | S→C | `party.updated` | alguém entrou, trocou de personagem ou foi removido |
 | S→C | `presence` · `member.kicked` · `room.closed` · `error{code,message,ref}` | |
 

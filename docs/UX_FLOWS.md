@@ -36,12 +36,12 @@ Dois caminhos, porque o problema é lentidão:
 | Passo | O que o usuário faz | Detalhes de UX |
 |---|---|---|
 | Sistema | Escolhe entre os sistemas disponíveis | Pulado se vier de uma mesa (usa o sistema da sala) |
-| Identidade | Nome e retrato | Galeria (Photo Picker, sem permissão) ou câmera (explicação antes de pedir). Corte quadrado nativo e redução para 512 px **no aparelho** |
-| Raça / Espécie | Toca num card | Card com descrição de 1 linha e chips de bônus e deslocamento. "Personalizado" em sistemas que permitem. Meio-Elfo: chips para os 2 atributos +1 |
+| Identidade | Nome e retrato | Galeria (Photo Picker, sem permissão) ou câmera (explicação antes de pedir). Corte quadrado nativo e redução para 512 px **no aparelho**, depois **ajuste do ângulo** (−90°, −15°, −5°, +5°, +15°, +90°) com a prévia no círculo do boneco |
+| Raça / Espécie | Toca num card | Card com descrição de 1 linha e chips de bônus e deslocamento. "Personalizado" em sistemas que permitem. Meio-Elfo: chips para os 2 atributos +1. **No Genérico:** o jogador digita a raça e distribui os pontos de atributo dela (−/+ em cada atributo, de −5 a +5) |
 | Classe | Toca num card | Chips: dado de vida e atributos principais |
 | Atributos | **Auto** (1 toque), Rolar (4d6kh3 no servidor, com os dados destacados em dourado/vermelho), Arranjo (toque em 2 atributos para trocar), Pontos (orçamento restante ao vivo), Manual | Mostra o valor final + modificador + bônus |
-| Antecedente | Card + bônus (+2/+1 ou +1/+1/+1 na regra 2024) | Chips com as combinações válidas: impossível escolher errado |
-| Revisão | Confere e conclui | Lista o que falta. O botão fica desabilitado até estar completo |
+| Antecedente / Origem | Card + bônus (+2/+1 ou +1/+1/+1 na regra 2024) | Chips com as combinações válidas: impossível escolher errado. **No Genérico** o passo se chama **Origem**: digitada, com os pontos de atributo dela, e obrigatória |
+| Revisão | Confere e conclui | Lista o que falta e os bônus somados. O botão fica desabilitado até estar completo |
 
 **Autosave**: cada passo salva o rascunho (`PATCH /characters/{id}`, incluindo `wizard_step`). Se o app fechar, o card "Rascunho · passo N" na lista reabre exatamente onde parou.
 
@@ -69,6 +69,7 @@ Dois caminhos, porque o problema é lentidão:
 - **Espaços de magia**: bolinhas que se apagam ao usar e voltam no descanso longo.
 - **Habilidades**: botão cheio enquanto há usos. Quando acabam, fica **cinza** com ampulheta e "recarrega no descanso curto/longo".
 - **Inventário**: barra de carga (verde → âmbar a 75% → vermelha e "SOBRECARREGADO") calculada pelo sistema (FOR×15 lb na 5ª edição; fixa no Genérico).
+- **Subir de nível** (botão "Nível" no topo da ficha, também no painel do Mestre): mostra "Nível 3 → 4". Na 5ª edição os PV vêm da classe e o diálogo pede os +2 de atributo só nos níveis certos (dá para pular, para quem pega um talento); no Genérico o jogador digita os PV ganhos e soma até 10 pontos. A mesa inteira recebe "Lyra subiu para o nível 4! (+8 PV, FOR +2)" no log.
 
 ## D. Mesa sincronizada
 
@@ -87,7 +88,12 @@ Layout em três colunas, pensado para monitor de PC:
 |---|---|---|
 | **Grupo** (personagens, PV, online, em que cena está) e **Inimigos** (PV, CA, estado). Arrastar para o mapa ou botão "colocar nesta cena". "Novo inimigo" com imagem, PV, CA, atributos do sistema da mesa, notas e quantidade | **Abas de cenas** e **mapa** (Konva): roda do mouse = zoom no cursor, arrastar o fundo = mover, arrastar boneco = mover com encaixe na grade (Alt solta livre), botão direito = esconder/mostrar, trazer para a frente, tamanho (½ a 4 casas), mover para outra cena, tirar do mapa. Soltar um arquivo de imagem no mapa troca o mapa da cena | **Detalhes ao vivo** do boneco selecionado: ficha do personagem (atributos clicáveis para rolar, magias com usos, inventário e carga, condições, anotações), PV grande com Dano/Cura/Temp. Nos inimigos: CA, "Jogadores veem: Ferido", rolagens **secretas** por padrão, editar e apagar. Abaixo: **log da sessão** e **rolador** (d4…d100, notação livre, secreta) |
 
-- **Bonecos:** redondos, com retrato, **anel** (verde-água = grupo, vermelho = inimigo), **arco de PV** em volta (verde → âmbar → vermelho) e nome. Escondidos ficam translúcidos, com anel tracejado e "(escondido)".
+- **Bonecos:** redondos, com retrato, **anel** (verde-água = grupo, vermelho = inimigo), **arco de PV** em volta (verde → âmbar → vermelho) e nome. Escondidos ficam translúcidos, com anel tracejado e "(escondido)". O **ângulo do retrato** se ajusta no painel da direita ou no botão direito ("Girar retrato 45°").
+- **Várias imagens na mesma cena:** botão **Imagens** (canto do mapa) aceita vários arquivos de uma vez, com o ajuste de ângulo de cada um antes de enviar; soltar arquivos no mapa faz o mesmo (numa cena sem mapa, o primeiro vira o fundo). Cada peça tem alças para **girar** (encaixa a cada 45°) e **redimensionar**; **Shift+clique** seleciona várias para mover, girar ou redimensionar juntas. No painel: ângulo, para a frente/para trás, **travar no lugar** (peça travada não sai do lugar e arrastar em cima move o mapa), duplicar, selecionar todas, apagar (ou tecla Delete).
+- **Objetos que carregam:** botão **Objeto** cria uma carroça, barco, jaula… (nome, imagem opcional, tamanho em casas). **Soltar um boneco em cima** coloca ele dentro (o objeto fica destacado enquanto arrasta); arrastar ou girar o objeto leva todo mundo junto. "Esconder dos jogadores quem está dentro" deixa os ocupantes ocultos (cada jogador ainda vê o próprio boneco). O painel lista quem está dentro, com "Tirar".
+- **Névoa de guerra:** ligada por cena em "Editar cena", com o alcance da visão em casas e "Cobrir tudo de novo". O Mestre vê o que **ninguém** explorou levemente escurecido e pode escolher "Como Lyra vê" para conferir a tela de um jogador (preto total).
+- **Aba Mundo** (ao lado de "Mesa", no topo): mapa-múndi com zoom (a imagem também pode ser girada no envio) e o interruptor "Jogadores veem o mapa". À direita, abas **Nações**, **Facções** e **Relações**: fichas com brasão, cor, governante/líder, capital/sede, descrição pública, **notas secretas** e a nação onde a facção atua; o olho revela ou esconde cada ficha. Relações: Aliança, Amizade, Neutra, Tensão ou Guerra, com detalhe e opção de revelar.
+- **Toda imagem enviada** (mapa, peça, objeto, inimigo, brasão, mapa-múndi) passa pelo ajuste de ângulo antes de ir para o servidor.
 - **Grupo separado:** "Nova cena", depois botão direito no boneco → "Mover para a cena", ou "Trazer o grupo todo para esta cena". O número na aba mostra quantos personagens estão em cada cena.
 - **Contas:** o admin redefine senhas pelo ícone de contas na lista de mesas (não há e-mail de recuperação).
 
@@ -97,6 +103,9 @@ Layout em três colunas, pensado para monitor de PC:
 - O **boneco do próprio jogador** tem anel dourado. Tocar num boneco mostra um cartão: personagem do grupo com a barra de PV animada; inimigo com nome, imagem e o **estado vago** (Ileso / Ferido / Muito ferido / Caído). Inimigos caídos aparecem apagados.
 - Os bonecos andam em tempo real enquanto o Mestre arrasta. Quando o Mestre leva o personagem para outra cena, o mapa troca sozinho e aparece o aviso "O Mestre levou você para outra cena".
 - Bonecos escondidos e cenas onde o jogador não está nunca chegam ao celular.
+- As **peças de cenário** e os **objetos** aparecem girados como o Mestre montou; quem está num objeto com ocupantes ocultos não aparece (só o próprio boneco).
+- **Névoa de guerra:** tudo que o personagem do jogador ainda não explorou fica **preto** e vai clareando conforme ele anda. Bonecos debaixo do preto não respondem ao toque.
+- Aba **Mundo**: o mapa-múndi (pinça para zoom, toque duplo volta) quando o Mestre libera, e as fichas das nações e facções já descobertas, com as relações conhecidas.
 
 ## Material Design 3 e acessibilidade
 
