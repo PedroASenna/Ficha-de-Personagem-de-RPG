@@ -67,9 +67,10 @@ try {
   $udp.Close()
   Assert ($reply.app -eq "rpgplay") "descoberta UDP"
 
-  # Porta de internet (127.0.0.1:8081): o que chega por ela é "de fora" e o cadastro pede o código de acesso.
+  # Porta de internet (127.0.0.1:8081): o que chega por ela é "de fora": sem os IPs da casa, e o cadastro de fora
+  # só vale com a internet ligada (o código de acesso é opcional e vem desligado).
   $remote = Invoke-RestMethod "http://127.0.0.1:8081/api/v1/discovery"
-  Assert ($remote.access_code_required -eq $true -and $remote.addresses.Count -eq 0) "porta de internet"
+  Assert ($remote.addresses.Count -eq 0 -and $remote.registration_open -eq $false -and $remote.access_code_required -eq $false) "porta de internet"
   $outside = @{ username = "de_fora"; password = "senha-de-fora"; display_name = "De Fora" } | ConvertTo-Json
   try {
     Invoke-RestMethod "http://127.0.0.1:8081/api/v1/auth/register" -Method Post -ContentType "application/json" -Body $outside | Out-Null
@@ -97,7 +98,7 @@ try {
         try { $found = Invoke-RestMethod "$($view.url)/api/v1/discovery" } catch { Start-Sleep 2 }
       }
     }
-    if ($found.access_code_required) { Write-Host "  ok: link rápido da Cloudflare no Windows" }
+    if ($found.app -eq "rpgplay" -and $found.addresses.Count -eq 0) { Write-Host "  ok: link rápido da Cloudflare no Windows" }
     else { Write-Warning "O link rápido da Cloudflare não respondeu (serviço externo)." }
   } catch { Write-Warning "Link rápido: $_" }
   finally {
