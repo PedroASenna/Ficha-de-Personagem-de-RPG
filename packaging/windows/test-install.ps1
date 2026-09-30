@@ -80,6 +80,30 @@ try {
   Write-Host $internet
   Assert ($internet -match "Jogar pela internet: desligado") "comando internet"
 
+  # Link rápido de verdade (baixa o cloudflared.exe e abre o túnel). Serviço externo: se falhar, só avisa.
+  $auth = @{ Authorization = "Bearer $($tokens.access_token)" }
+  try {
+    Invoke-RestMethod "http://127.0.0.1:8080/api/v1/remote" -Method Put -Headers $auth -ContentType "application/json" -Body '{"mode":"quick"}' | Out-Null
+    $view = $null
+    for ($i = 0; $i -lt 90; $i++) {
+      $view = Invoke-RestMethod "http://127.0.0.1:8080/api/v1/remote" -Headers $auth
+      if ($view.status -eq "on") { break }
+      Start-Sleep 2
+    }
+    Write-Host "  link rápido: $($view.status) $($view.url) $($view.error)"
+    $found = $null
+    if ($view.status -eq "on") {
+      for ($i = 0; $i -lt 30 -and -not $found; $i++) {
+        try { $found = Invoke-RestMethod "$($view.url)/api/v1/discovery" } catch { Start-Sleep 2 }
+      }
+    }
+    if ($found.access_code_required) { Write-Host "  ok: link rápido da Cloudflare no Windows" }
+    else { Write-Warning "O link rápido da Cloudflare não respondeu (serviço externo)." }
+  } catch { Write-Warning "Link rápido: $_" }
+  finally {
+    Invoke-RestMethod "http://127.0.0.1:8080/api/v1/remote" -Method Put -Headers $auth -ContentType "application/json" -Body '{"mode":"off"}' | Out-Null
+  }
+
   $diag = (& $Exe diagnostico) -join "`n"
   Write-Host $diag
   Assert ($diag -match "Firewall do Windows: regra") "diagnóstico vê a regra do firewall"
