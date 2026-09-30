@@ -14,7 +14,8 @@ export default defineConfig({
   reporter: "list",
   use: { trace: "retain-on-failure" },
   webServer: {
-    command: `rm -rf .e2e-data && ${serverBin} serve`,
+    // Apaga os dados do teste anterior com o node (funciona no Linux e no cmd do Windows).
+    command: `node -e "require('fs').rmSync('.e2e-data',{recursive:true,force:true})" && ${serverBin} serve`,
     url: `http://127.0.0.1:${HTTP_PORT}/health`,
     reuseExistingServer: false,
     timeout: 60_000,
@@ -23,7 +24,10 @@ export default defineConfig({
       RPG_PORT: String(HTTP_PORT),
       RPG_DISCOVERY_PORT: String(DISCOVERY_PORT),
       RPG_SERVER_NAME: "Mesa Desktop E2E",
-      ...(process.env.RPG_SERVER_BIN ? {} : { RPG_WEB_DIST_DIR: "../web/dist" }),
+      // Com o executável empacotado vale o painel que vai dentro dele; senão, o web/dist compilado.
+      ...(process.env.RPG_SERVER_BIN && !process.env.RPG_WEB_DIST_DIR
+        ? {}
+        : { RPG_WEB_DIST_DIR: process.env.RPG_WEB_DIST_DIR ?? "../web/dist" }),
     },
   },
   metadata: { HTTP_PORT, DISCOVERY_PORT },

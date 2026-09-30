@@ -35,7 +35,7 @@ sequenceDiagram
 
 1. **Programa do Mestre (Electron):** broadcast UDP primeiro (≈1,5 s). Se ninguém responder (roteadores que bloqueiam broadcast), varre a rede /24 por HTTP. Lembra o último servidor e reconecta direto.
 2. **App dos jogadores:** o Android/Expo não tem UDP sem módulo nativo extra, então o app descobre o próprio IP (`expo-network`) e varre a rede /24 pelo HTTP. São 254 endereços, 32 por vez; no pior caso leva uns 6 s. Cada servidor aparece na lista assim que responde.
-3. **QR code:** o painel do Mestre mostra `rpgplay://join?server=http://IP:8080&pin=ABC123`. O leitor do app (ou a câmera do sistema) configura o servidor e, depois do login, já entra na mesa com o PIN. Pela internet o link leva também `&code=` (código de acesso), e o convite é uma página https do próprio servidor (`/entrar?pin=…&code=…`), clicável em qualquer mensageiro, com um botão que abre esse link no app.
+3. **QR code:** o painel do Mestre mostra `rpgplay://join?server=http://IP:8080&pin=ABC123`. O leitor do app (ou a câmera do sistema) configura o servidor e, depois do login, abre a aba Mesas com o PIN pronto (o jogador pode criar o personagem antes de entrar). Pela internet o link leva também `&code=` (código de acesso), e o convite é uma página https do próprio servidor (`/entrar?pin=…&code=…`), clicável em qualquer mensageiro, com um botão que abre esse link no app.
 
 O `server_id` (gerado uma vez e guardado em `/var/lib/rpgplay/server_id`) identifica o servidor mesmo que o IP mude. O app avisa quando o servidor escolhido é outro: trocar de servidor encerra a sessão, porque as contas são de cada servidor.
 
@@ -63,7 +63,7 @@ Ligado pelo admin no painel (globo "Internet"), de graça e sem abrir portas no 
 
 - **Link rápido:** o servidor roda `cloudflared tunnel --url http://127.0.0.1:8081` (Cloudflare Quick Tunnel, sem conta). O `cloudflared` vem do PATH ou é baixado na primeira vez, do Release oficial da Cloudflare no GitHub, para `{dados}/bin`. O link `https://…trycloudflare.com` sai da saída do programa e muda a cada abertura do túnel. Se o túnel cair, o servidor reabre sozinho (espera crescente até 60 s).
 - **Link fixo:** Tailscale Funnel. O comando `rpgplay-server internet fixo` (root no Linux) roda `tailscale funnel --bg 8081`. O servidor descobre o nome em `tailscale status --json` (`Self.DNSName`) e confere se o link chega nele mesmo (`/api/v1/discovery` com o mesmo `server_id`).
-- O estado fica em `{dados}/remote.json` (modo, código de acesso, último link fixo e o link atual), com permissão 600. Ligado, o túnel volta sozinho quando o servidor reinicia.
+- O estado fica em `{dados}/remote.json` (modo, código de acesso e se ele é exigido, último link fixo e o link atual), com permissão 600. Ligado, o túnel volta sozinho quando o servidor reinicia.
 
 ```mermaid
 sequenceDiagram
@@ -72,22 +72,22 @@ sequenceDiagram
   participant C as cloudflared / tailscaled (no servidor)
   participant S as Servidor (127.0.0.1:8081)
   C->>T: conexão de saída (túnel)
-  J->>T: https://…/api/v1/auth/register {código de acesso}
+  J->>T: https://…/api/v1/auth/register
   T->>C: pelo túnel
   C->>S: http://127.0.0.1:8081 (+ Cf-Connecting-Ip / X-Forwarded-For)
   Note over S: chegou pela porta de internet = "de fora"
-  S-->>J: 201 (código certo) ou 403
+  S-->>J: 201 (ou 403 sem o código, se o admin exige)
 ```
 
 **Como o servidor sabe que é "de fora":** o `rpgplay-server serve` escuta em duas portas, a da rede de casa (`0.0.0.0:8080`) e a de internet (`127.0.0.1:8081`, só a própria máquina alcança). Tudo o que chega pela porta de internet, ou traz os cabeçalhos que os túneis sempre colocam (`Cf-Connecting-Ip`, `Tailscale-Funnel-Request`), é tratado como vindo da internet (`app/core/origin.py`). Um IP público sozinho não conta: com IPv6, os celulares da própria casa têm IP público.
 
 **O que muda para quem vem de fora:**
 
-- **Cadastro só com o código de acesso** (`XXXX-XXXX`, 8 caracteres do alfabeto do PIN, sem 0/O/1/I). Comparação em tempo constante, sem diferenciar maiúsculas nem o traço. Com a internet desligada, o cadastro de fora é recusado. A primeira conta (admin) nunca pode ser criada de fora.
+- **Cadastro:** livre por padrão (a conta e o personagem não dependem de mesa; a proteção é a aprovação de entrada). O admin pode exigir o **código de acesso** (`XXXX-XXXX`, 8 caracteres do alfabeto do PIN, sem 0/O/1/I; comparação em tempo constante, sem diferenciar maiúsculas nem o traço). Com a internet desligada, o cadastro de fora é recusado. A primeira conta (admin) nunca pode ser criada de fora.
 - **Aprovação de entrada nas mesas:** ao ligar a internet, as mesas abertas passam a pedir aprovação, e as novas já nascem assim (o Mestre desliga por mesa). Quem entra pelo PIN recebe `409 join_pending` e espera; o Mestre vê o pedido ao vivo (`join.requests` pelo WebSocket) e aceita ou recusa. Recusado, o jogador só pode pedir de novo depois de 10 minutos. A consulta da sala de espera (`GET /rooms/join-status`) responde "sala não encontrada" para quem não pediu, então não serve para descobrir PINs.
 - **Limites:** cadastro de fora com 10 tentativas por IP a cada 10 minutos (o IP vem do `Cf-Connecting-Ip`); login de fora com 20 tentativas por conta a cada 5 minutos, somando todos os IPs (além do limite por IP e conta de sempre).
-- **Descoberta pela internet** não mostra os IPs da casa e avisa o app que o cadastro pede o código (`access_code_required`).
-- **O painel do Mestre** também abre pelo link (com login). O botão de internet e o código só aparecem para o admin; Mestres veem o link e o código da mesa em "Conectar celulares".
+- **Descoberta pela internet** não mostra os IPs da casa e avisa o app (e o painel) quando o cadastro pede o código (`access_code_required`).
+- **O painel do Mestre** também abre pelo link (com login). O botão de internet só aparece para o admin; Mestres veem o link (e o código, se exigido) em "Conectar celulares".
 
 **Limites dos serviços grátis:** o Quick Tunnel da Cloudflare é para testes, sem garantia de funcionamento e com até 200 requisições simultâneas (sobra para uma mesa de RPG). O Funnel do Tailscale é grátis para uso pessoal. Nenhum dos dois exige cartão de crédito.
 
@@ -98,7 +98,7 @@ sequenceDiagram
 | Banco (SQLite, modo WAL) | `/var/lib/rpgplay/rpgplay.db` |
 | Mapas, peças de cenário, brasões, retratos | `/var/lib/rpgplay/media/` |
 | Segredo JWT, id do servidor | `/var/lib/rpgplay/jwt_secret`, `/var/lib/rpgplay/server_id` |
-| Acesso pela internet (modo, código de acesso, links) e o `cloudflared` baixado | `/var/lib/rpgplay/remote.json`, `/var/lib/rpgplay/bin/` |
+| Acesso pela internet (modo, código de acesso e se ele é exigido, links) e o `cloudflared` baixado | `/var/lib/rpgplay/remote.json`, `/var/lib/rpgplay/bin/` |
 | Configuração | `/etc/rpgplay/server.env` |
 | Programa | `/opt/rpgplay-server/` (Python embutido; não usa o Python do sistema) |
 | No Windows | programa em `C:\Program Files\RPG Play Servidor`; banco, imagens, chaves e `servidor.env` em `C:\ProgramData\RPG Play\servidor` |

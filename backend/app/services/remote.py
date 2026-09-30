@@ -10,9 +10,10 @@ Dois jeitos, escolhidos pelo admin no painel:
   ``tailscale funnel --bg``). Aqui o servidor só descobre o endereço e confere se responde.
 
 Os dois entregam o tráfego em 127.0.0.1:``remote_port``: tudo o que chega por essa porta é "de fora" (veja
-``app/core/origin.py``). Quem vem de fora precisa do código de acesso para criar conta.
+``app/core/origin.py``). Quem vem de fora cria conta e personagem livremente; a proteção é a aprovação de
+entrada nas mesas. O admin pode também exigir um código de acesso para criar conta (``require_code``).
 
-O estado fica em ``{data_dir}/remote.json`` (modo, código de acesso, último link fixo).
+O estado fica em ``{data_dir}/remote.json`` (modo, código de acesso e se ele é exigido, último link fixo).
 """
 
 import asyncio
@@ -95,6 +96,8 @@ class RemoteAccess:
         data = self._load()
         self.mode: Mode = data.get("mode") if data.get("mode") in ("off", "quick", "fixed") else "off"
         self.access_code: str = data.get("access_code") or new_access_code()
+        # Desligado por padrão: criar conta e personagem não depende do Mestre (a mesa pede aprovação).
+        self.require_code: bool = data.get("require_code") is True
         self.fixed_url: str | None = data.get("fixed_url")
         self.status: Status = "off"
         self.url: str | None = None
@@ -117,6 +120,7 @@ class RemoteAccess:
         data = {
             "mode": self.mode,
             "access_code": self.access_code,
+            "require_code": self.require_code,
             "fixed_url": self.fixed_url,
             "current_url": self.url if self.status == "on" else None,
         }
@@ -134,6 +138,10 @@ class RemoteAccess:
     def code_matches(self, value: str | None) -> bool:
         return hmac.compare_digest(normalize_code(value), normalize_code(self.access_code))
 
+    def set_require_code(self, value: bool) -> None:
+        self.require_code = value
+        self.save()
+
     def new_code(self) -> str:
         self.access_code = new_access_code()
         self.save()
@@ -147,6 +155,7 @@ class RemoteAccess:
             "fixed_url": self.fixed_url,
             "error": self.error,
             "access_code": self.access_code,
+            "require_code": self.require_code,
             "internet_port": self.settings.remote_port,
             "available": self.settings.internet_enabled,
         }

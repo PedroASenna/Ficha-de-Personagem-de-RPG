@@ -140,7 +140,7 @@ function InternetContent({ pin }: { pin: string }) {
       </Stack>
     );
   }
-  if (data.status !== "on" || !data.url || !data.access_code) {
+  if (data.status !== "on" || !data.url) {
     return (
       <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
@@ -163,8 +163,8 @@ function InternetContent({ pin }: { pin: string }) {
       <JoinQr link={joinLink(url, pin, code)} label={`QR code para entrar na mesa ${pin} pela internet`} />
       <Stack spacing={2} sx={{ minWidth: 0 }}>
         <Typography>
-          Mande o convite no grupo (WhatsApp, Discord…). Quem abrir o link no celular entra no app com tudo preenchido;
-          se estiver perto, pode ler o QR code.
+          Mande o convite no grupo (WhatsApp, Discord…). Quem abrir o link no celular cai no app: cria a conta e o
+          personagem e entra na mesa quando quiser. Se estiver perto, pode ler o QR code.
         </Typography>
         <Box>
           <Button
@@ -189,15 +189,22 @@ function InternetContent({ pin }: { pin: string }) {
             <CopyButton text={url} what="Link" />
           </Stack>
           <Typography variant="overline" color="text.secondary">
-            Código de acesso · PIN
+            {code ? "Código de acesso · PIN" : "PIN da mesa"}
           </Typography>
           <Typography variant="h5" sx={{ fontFamily: "monospace", letterSpacing: 3 }}>
-            <span data-testid="internet-code">{code}</span> · {pin}
+            {code && (
+              <>
+                <span data-testid="internet-code">{code}</span> ·{" "}
+              </>
+            )}
+            <span data-testid="internet-pin">{pin}</span>
           </Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary">
-          O código só é pedido para criar conta pela internet. Com “Aprovar entrada” ligado, ninguém entra na mesa sem
-          você aceitar.
+          {code
+            ? "O código é pedido para criar conta pela internet. "
+            : "Criar conta é livre (quem joga de longe já faz o personagem antes). "}
+          Com “Aprovar entrada” ligado, ninguém entra na mesa sem você aceitar.
         </Typography>
         <Box>{settings}</Box>
       </Stack>

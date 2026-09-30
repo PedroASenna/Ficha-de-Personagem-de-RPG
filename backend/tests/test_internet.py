@@ -132,11 +132,19 @@ def test_quick_tunnel_share_code_and_turn_off(net, net_settings):
     assert saved["mode"] == "quick" and saved["current_url"] == QUICK_URL
     assert saved["access_code"] == view["access_code"]
 
-    # Quem mestra uma mesa vê o link e o código; jogador sem mesa, não.
+    # Quem mestra uma mesa vê o link; jogador sem mesa, não. O código só vai junto se o admin exigir.
+    assert view["require_code"] is False
     assert client.get(f"{API}/remote/share", headers=auth(player)).status_code == 403
     client.post(f"{API}/rooms", json={"name": "Mesa", "ruleset_id": "srd-5.1"}, headers=auth(player))
     share = client.get(f"{API}/remote/share", headers=auth(player)).json()
-    assert share == {"enabled": True, "status": "on", "url": QUICK_URL, "access_code": view["access_code"]}
+    assert share == {"enabled": True, "status": "on", "url": QUICK_URL, "access_code": None}
+
+    # Exigir o código não reabre o túnel (o link continua o mesmo).
+    strict = client.put(f"{API}/remote", json={"require_code": True}, headers=auth(admin)).json()
+    assert strict["require_code"] is True and strict["url"] == QUICK_URL and strict["status"] == "on"
+    assert json.loads((net_settings.data_path / "remote.json").read_text())["require_code"] is True
+    share = client.get(f"{API}/remote/share", headers=auth(player)).json()
+    assert share["access_code"] == view["access_code"]
 
     new = client.post(f"{API}/remote/code", headers=auth(admin)).json()
     assert new["access_code"] != view["access_code"]
@@ -185,25 +193,47 @@ def test_turning_on_asks_approval_in_open_rooms(net):
 # ---------- cadastro pela internet ----------
 
 
-def test_register_from_internet_needs_access_code(net):
+def test_register_from_internet_without_code(net):
+    """Quem joga de longe cria a conta e o personagem sem depender de mesa nem de código."""
     client, remote = net
     body = {"username": "longe", "password": "senha-secreta", "display_name": "De Longe"}
 
     # Sem ninguém cadastrado: o dono cria a conta em casa.
-    r = client.post(f"{remote}{API}/auth/register", json={**body, "access_code": "x"})
+    r = client.post(f"{remote}{API}/auth/register", json=body)
     assert r.status_code == 403
     admin = register(client, "Dono")
 
     info = client.get(f"{remote}{API}/discovery").json()
-    assert info["access_code_required"] and not info["registration_open"] and info["addresses"] == []
-    assert client.get(f"{API}/discovery").json()["access_code_required"] is False
+    assert not info["access_code_required"] and not info["registration_open"] and info["addresses"] == []
 
     r = client.post(f"{remote}{API}/auth/register", json=body)
     assert r.status_code == 403 and "desligado" in r.json()["detail"]
 
-    code = turn_on(client, admin)["access_code"]
+    turn_on(client, admin)
     info = client.get(f"{remote}{API}/discovery").json()
-    assert info["registration_open"] and info["internet"]
+    assert info["registration_open"] and info["internet"] and not info["access_code_required"]
+    r = client.post(f"{remote}{API}/auth/register", json=body)
+    assert r.status_code == 201, r.text
+    token = r.json()["access_token"]
+    # Já cria personagem, sem estar em mesa nenhuma.
+    hero = client.post(
+        f"{remote}{API}/characters/quick",
+        json={"ruleset_id": "srd-5.1", "name": "Viajante"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert hero.status_code == 201, hero.text
+
+
+def test_register_from_internet_with_required_code(net):
+    client, remote = net
+    body = {"username": "longe", "password": "senha-secreta", "display_name": "De Longe"}
+    admin = register(client, "Dono")
+    code = turn_on(client, admin)["access_code"]
+    client.put(f"{API}/remote", json={"require_code": True}, headers=auth(admin))
+
+    info = client.get(f"{remote}{API}/discovery").json()
+    assert info["access_code_required"] and info["registration_open"]
+    assert client.get(f"{API}/discovery").json()["access_code_required"] is False
 
     r = client.post(f"{remote}{API}/auth/register", json={**body, "access_code": "AAAA-AAAA"})
     assert r.status_code == 403 and r.json()["code"] == "access_code"
@@ -216,7 +246,9 @@ def test_register_from_internet_needs_access_code(net):
 
 def test_register_from_internet_is_rate_limited(net):
     client, remote = net
-    turn_on(client, register(client, "Dono"))
+    admin = register(client, "Dono")
+    turn_on(client, admin)
+    client.put(f"{API}/remote", json={"require_code": True}, headers=auth(admin))
     statuses = [
         client.post(
             f"{remote}{API}/auth/register",
@@ -460,7 +492,7 @@ def test_cli_internet_status(settings, monkeypatch, capsys):
     monkeypatch.setenv("RPG_DATA_DIR", str(settings.data_path))
     settings.data_path.mkdir(parents=True, exist_ok=True)
     (settings.data_path / "remote.json").write_text(
-        json.dumps({"mode": "quick", "access_code": "ABCD-EFGH", "current_url": QUICK_URL})
+        json.dumps({"mode": "quick", "access_code": "ABCD-EFGH", "require_code": True, "current_url": QUICK_URL})
     )
     from app.core.config import get_settings
 

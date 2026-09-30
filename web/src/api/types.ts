@@ -42,6 +42,8 @@ export interface RemoteView {
   fixed_url: string | null;
   error: string | null;
   access_code: string;
+  /** Exigir o código para criar conta pela internet (desligado por padrão). */
+  require_code: boolean;
   internet_port: number;
   available: boolean;
 }

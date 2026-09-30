@@ -16,7 +16,7 @@ flowchart TD
     Rooms["Mesas"]
     Account["Conta"]
   end
-  Login -- "veio do QR code" --> Room
+  Login -- "veio do QR code ou do convite" --> Rooms
   Chars -- "⚡ Criação expressa (1 toque)" --> HUD["Ficha / HUD de combate"]
   Chars -- "Passo a passo" --> Wizard
   Wizard --> HUD
@@ -128,10 +128,10 @@ Layout em três colunas, pensado para monitor de PC:
 
 ## G. Jogar pela internet
 
-- **Admin (painel):** globo **Internet** na lista de mesas (fica dourado quando ligado). Três opções: Desligado, **Link rápido (Cloudflare)** e **Link fixo (Tailscale)**. A situação aparece ao vivo ("Baixando o programa da Cloudflare…", "Abrindo o link…", "No ar", "Com problema" com o motivo), com o link, o **código de acesso** (copiar, trocar) e, no link fixo, o passo a passo e "Conferir de novo".
-- **Mestre (mesa):** "Conectar celulares" ganha as abas **Na mesma rede (Wi-Fi)** e **Pela internet**. Na da internet: QR code com o link e o código, **Copiar convite** (texto pronto para o WhatsApp com o link `/entrar`), o link e "código · PIN" em letras grandes. Embaixo, nas duas abas, o interruptor **Aprovar entrada**.
+- **Admin (painel):** globo **Internet** na lista de mesas (fica dourado quando ligado). Três opções: Desligado, **Link rápido (Cloudflare)** e **Link fixo (Tailscale)**. A situação aparece ao vivo ("Baixando o programa da Cloudflare…", "Abrindo o link…", "No ar", "Com problema" com o motivo), com o link, o interruptor **Pedir código de acesso para criar conta pela internet** (desligado por padrão; ligado, mostra o código com copiar e trocar) e, no link fixo, o passo a passo e "Conferir de novo".
+- **Mestre (mesa):** "Conectar celulares" ganha as abas **Na mesma rede (Wi-Fi)** e **Pela internet**. Na da internet: QR code com o link, **Copiar convite** (texto pronto para o WhatsApp com o link `/entrar`), o link e o PIN em letras grandes (e o código, quando exigido). Embaixo, nas duas abas, o interruptor **Aprovar entrada**.
 - **Pedidos de entrada:** uma faixa no topo da mesa, "Ana (@ana) com Lyra quer entrar na mesa pela internet", com **Aceitar** e **Recusar**, e um aviso quando chega pedido novo. Na lista de mesas, o cartão mostra "1 pedido de entrada".
-- **Jogador (convite):** abre o link `/entrar` no celular → **Abrir no app RPG Play** → o app configura o servidor e abre "Criar conta" com o **Código de acesso** já preenchido (sem o convite, o campo aparece vazio, com a dica "peça o código ao Mestre").
+- **Jogador (convite):** abre o link `/entrar` no celular → **Abrir no app RPG Play** → o app configura o servidor → entrar ou criar conta → a aba **Mesas** abre com o cartão "Convite para a mesa ABC234" (PIN já no campo), com **Criar personagem** e **Agora não**. A conta e o personagem não dependem de mesa; o jogador entra quando quiser. Se o admin exige o código, "Criar conta" mostra o campo **Código de acesso** (já preenchido pelo convite) e avisa quando o que foi digitado não tem o formato certo ("não é o PIN da mesa").
 - **Sala de espera:** entrando pelo PIN numa mesa com aprovação, o app mostra "Esperando o Mestre" e abre a mesa sozinho quando ele aceita. Recusado: "Entrada não aceita" (pode pedir de novo depois de 10 minutos). "Voltar" não cancela o pedido.
 
 ## Material Design 3 e acessibilidade

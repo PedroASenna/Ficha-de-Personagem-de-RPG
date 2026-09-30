@@ -500,7 +500,10 @@ def _internet_status(settings: Settings) -> int:
     if mode != "off":
         url = data.get("current_url")
         print(f"  link agora:        {url or 'abrindo… (confira no painel do Mestre, em Internet)'}")
-        print(f"  código de acesso:  {remote.access_code}")
+        if data.get("require_code") is True:
+            print(f"  código de acesso:  {remote.access_code} (pedido para criar conta pela internet)")
+        else:
+            print("  código de acesso:  não é pedido (criar conta é livre; as mesas pedem aprovação)")
     if data.get("fixed_url"):
         print(f"  link fixo:         {data['fixed_url']}")
     print(f"  porta de internet: 127.0.0.1:{settings.remote_port} (não precisa abrir no roteador)")

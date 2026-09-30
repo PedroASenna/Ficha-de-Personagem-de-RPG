@@ -22,16 +22,19 @@ class RemoteOut(BaseModel):
     fixed_url: str | None = None
     error: str | None = None
     access_code: str
+    require_code: bool = False
     internet_port: int
     available: bool = True
 
 
 class RemoteModeIn(BaseModel):
-    mode: Literal["off", "quick", "fixed"]
+    mode: Literal["off", "quick", "fixed"] | None = None
+    # Exigir o código de acesso para criar conta pela internet (desligado por padrão).
+    require_code: bool | None = None
 
 
 class RemoteShareOut(BaseModel):
-    """O que o Mestre passa para quem joga de longe: o link e o código de acesso (para criar a conta)."""
+    """O que o Mestre passa para quem joga de longe: o link (e o código de acesso, se o admin exige)."""
 
     enabled: bool
     status: Literal["off", "downloading", "starting", "on", "error"]
@@ -51,8 +54,12 @@ async def set_remote(
     db: AsyncSession = Depends(get_db),
     state: AppState = Depends(get_state),
 ):
-    """Liga/desliga o acesso pela internet. Ao ligar, as mesas abertas passam a pedir aprovação de entrada
-    (cada Mestre pode desligar na própria mesa)."""
+    """Liga/desliga o acesso pela internet e a exigência do código. Ao ligar, as mesas abertas passam a pedir
+    aprovação de entrada (cada Mestre pode desligar na própria mesa)."""
+    if data.require_code is not None:
+        state.remote.set_require_code(data.require_code)
+    if data.mode is None or data.mode == state.remote.mode:
+        return state.remote.view()
     was_enabled = state.remote.enabled
     await state.remote.set_mode(data.mode)
     if state.remote.enabled and not was_enabled:
@@ -97,5 +104,5 @@ async def share(
         enabled=remote.enabled,
         status=remote.status,
         url=remote.url if on else None,
-        access_code=remote.access_code if remote.enabled else None,
+        access_code=remote.access_code if remote.enabled and remote.require_code else None,
     )

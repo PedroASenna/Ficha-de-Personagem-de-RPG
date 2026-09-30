@@ -44,12 +44,12 @@ async def register(
 ):
     remote = is_remote(request.scope, state.settings)
     if remote:
-        # Pela internet: só com o acesso ligado e o código que o Mestre passou.
+        # Pela internet: só com o acesso ligado (e o código de acesso, se o admin exigir).
         if not state.limiters.register.allow(f"register:{client_key(request.scope, state.settings)}"):
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde alguns minutos.")
         if not state.remote.enabled:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "O cadastro pela internet está desligado neste servidor.")
-        if not state.remote.code_matches(data.access_code):
+        if state.remote.require_code and not state.remote.code_matches(data.access_code):
             raise AccessCodeError("Código de acesso incorreto. Peça o código ao Mestre.")
     active_users = await db.scalar(select(func.count()).select_from(User).where(User.deleted_at.is_(None)))
     if remote and not active_users:

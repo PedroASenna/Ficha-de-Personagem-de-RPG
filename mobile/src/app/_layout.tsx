@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
@@ -8,7 +8,7 @@ import { ActivityIndicator, PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { api } from '../lib/api';
-import { joinByPin, openJoined } from '../lib/joining';
+import { keepInvite } from '../lib/joining';
 import { initFeedback } from '../lib/feedback';
 import { useServer } from '../state/server';
 import { useSession } from '../state/session';
@@ -48,13 +48,12 @@ export default function RootLayout() {
     }
   }, [signedIn, setUser]);
 
-  // PIN do QR code do Mestre: entra na mesa assim que houver login.
+  // PIN do QR code ou do convite: depois do login, a aba Mesas abre com ele pronto. O jogador entra quando
+  // quiser (pode criar o personagem antes); a conta não depende de mesa nenhuma.
   useEffect(() => {
     if (!signedIn || !pendingPin) return;
     setPendingPin(null);
-    joinByPin(pendingPin)
-      .then((outcome) => openJoined(outcome, pendingPin))
-      .catch(() => router.push({ pathname: '/rooms', params: { pin: pendingPin } }));
+    keepInvite(pendingPin);
   }, [signedIn, pendingPin, setPendingPin]);
 
   return (

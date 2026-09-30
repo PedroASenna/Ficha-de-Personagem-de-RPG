@@ -36,4 +36,11 @@ describe("conectar celulares", () => {
     expect(text).toContain("ABCD-EFGH");
     expect(text).toContain("PIN ABC123");
   });
+
+  it("sem código exigido, o convite só leva o link e o PIN", () => {
+    expect(joinLink("https://mesa-abc.trycloudflare.com", "ABC123", null)).not.toContain("code=");
+    const text = inviteText("https://mesa-abc.trycloudflare.com", "ABC123", null);
+    expect(text).toContain("https://mesa-abc.trycloudflare.com/entrar?pin=ABC123\n");
+    expect(text).not.toContain("código");
+  });
 });

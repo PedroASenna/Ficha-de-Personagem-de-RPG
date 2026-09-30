@@ -44,10 +44,11 @@ PAGE = """<!doctype html>
     <ol>
       <li>Instale o app RPG Play (arquivo <b>.apk</b> em <a href="__RELEASES__">Releases</a>).</li>
       <li>No app, em <b>“Ou digite o endereço”</b>, use:<br><span class="value" id="server"></span></li>
+      <li>Crie sua conta e, se quiser, o personagem.</li>
       <li id="code-step">Ao criar a conta, informe o código de acesso:<br><span class="value" id="code"></span></li>
       <li id="pin-step">Em <b>Mesas</b>, entre com o PIN:<br><span class="value" id="pin"></span></li>
     </ol>
-    <p class="muted">Depois é só esperar o Mestre aceitar sua entrada.</p>
+    <p class="muted">Na mesa, o Mestre aceita sua entrada.</p>
   </div>
 </main>
 <script>

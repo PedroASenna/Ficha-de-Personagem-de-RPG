@@ -33,6 +33,7 @@ export default function LoginScreen() {
 
   const validUser = USERNAME.test(username);
   const validCode = !needsCode || normalizeAccessCode(code) !== null;
+  const codeTyped = code.replace(/[^A-Z0-9]/g, '').length > 0;
   const canSubmit =
     validUser &&
     password.length >= (mode === 'register' ? 8 : 1) &&
@@ -105,7 +106,11 @@ export default function LoginScreen() {
                 mode="outlined"
                 placeholder="ABCD-EFGH"
               />
-              <HelperText type="info">Você está conectando pela internet: peça o código ao Mestre.</HelperText>
+              <HelperText type={codeTyped && !validCode ? 'error' : 'info'}>
+                {codeTyped && !validCode
+                  ? 'O código de acesso tem 8 letras e números, como K7QD-M2XP (não é o PIN da mesa).'
+                  : 'Este servidor pede um código para criar conta pela internet: peça ao Mestre.'}
+              </HelperText>
             </>
           ) : null}
         </>

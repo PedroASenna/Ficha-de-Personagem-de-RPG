@@ -8,15 +8,29 @@ import { Screen } from '../../components/common/Screen';
 import { ApiError } from '../../lib/api';
 import { joinByPin, openJoined } from '../../lib/joining';
 import { keys, useRooms } from '../../lib/queries';
+import { useServer } from '../../state/server';
 
 const PIN_CHARS = /[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g;
+
+function cleanPin(value: string): string {
+  return value.toUpperCase().replace(PIN_CHARS, '').slice(0, 6);
+}
 
 export default function RoomsScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { data: rooms } = useRooms();
   const params = useLocalSearchParams<{ pin?: string }>();
-  const [pin, setPin] = useState((params.pin ?? '').toUpperCase().replace(PIN_CHARS, '').slice(0, 6));
+  const invitePin = useServer((s) => s.invitePin);
+  const setInvitePin = useServer((s) => s.setInvitePin);
+  const source = params.pin ?? invitePin ?? '';
+  const [pin, setPin] = useState(cleanPin(source));
+  // A aba fica montada: o PIN de um convite novo (ou do link) chega depois e preenche o campo.
+  const [seenSource, setSeenSource] = useState(source);
+  if (source !== seenSource) {
+    setSeenSource(source);
+    if (source) setPin(cleanPin(source));
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +40,7 @@ export default function RoomsScreen() {
     try {
       const outcome = await joinByPin(pin);
       await queryClient.invalidateQueries({ queryKey: keys.rooms });
+      if (invitePin === pin) setInvitePin(null);
       openJoined(outcome, pin);
       setPin('');
     } catch (e) {
@@ -37,6 +52,24 @@ export default function RoomsScreen() {
 
   return (
     <Screen>
+      {invitePin ? (
+        <Card mode="outlined">
+          <Card.Title title={`Convite para a mesa ${invitePin}`} subtitle="Entre agora ou crie o personagem antes" />
+          <Card.Content>
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              Sua conta já está pronta. Se quiser, crie o personagem primeiro; o PIN fica guardado aqui. Ao entrar, o
+              Mestre pode precisar aceitar.
+            </Text>
+          </Card.Content>
+          <Card.Actions>
+            <Button onPress={() => setInvitePin(null)}>Agora não</Button>
+            <Button mode="contained-tonal" icon="account-plus" onPress={() => router.push('/character/new')}>
+              Criar personagem
+            </Button>
+          </Card.Actions>
+        </Card>
+      ) : null}
+
       <Card mode="contained">
         <Card.Title title="Entrar numa mesa" subtitle="Peça o PIN de 6 caracteres ao Mestre" />
         <Card.Content style={{ gap: 8 }}>
@@ -44,7 +77,7 @@ export default function RoomsScreen() {
             mode="outlined"
             label="PIN da sala"
             value={pin}
-            onChangeText={(t) => setPin(t.toUpperCase().replace(PIN_CHARS, '').slice(0, 6))}
+            onChangeText={(t) => setPin(cleanPin(t))}
             autoCapitalize="characters"
             autoCorrect={false}
             style={styles.pin}

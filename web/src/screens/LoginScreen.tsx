@@ -19,9 +19,13 @@ export function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const { setTokens, setUser } = useSession.getState();
 
   const server = useQuery({ queryKey: ["discovery"], queryFn: () => api<Discovery>("/discovery", { auth: false }) });
+  const registrationOpen = server.data?.registration_open ?? true;
+  // Painel aberto pelo link da internet num servidor que exige o código para criar conta.
+  const needsCode = Boolean(server.data?.access_code_required);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -29,7 +33,12 @@ export function LoginScreen() {
         mode === "login"
           ? await api<Tokens>("/auth/login", { json: { username, password }, auth: false })
           : await api<Tokens>("/auth/register", {
-              json: { username, password, display_name: displayName || username },
+              json: {
+                username,
+                password,
+                display_name: displayName || username,
+                ...(needsCode ? { access_code: accessCode } : {}),
+              },
               auth: false,
             });
       setTokens(tokens);
@@ -41,8 +50,6 @@ export function LoginScreen() {
     event.preventDefault();
     submit.mutate();
   };
-
-  const registrationOpen = server.data?.registration_open ?? true;
 
   return (
     <Box
@@ -85,6 +92,16 @@ export function LoginScreen() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Mestre Pedro"
+            />
+          )}
+          {mode === "register" && needsCode && (
+            <TextField
+              label="Código de acesso"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+              placeholder="K7QD-M2XP"
+              required
+              helperText="Este servidor pede um código para criar conta pela internet: peça ao Mestre."
             />
           )}
           <TextField

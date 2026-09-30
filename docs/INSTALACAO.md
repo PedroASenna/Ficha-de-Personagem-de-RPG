@@ -17,9 +17,9 @@ flowchart LR
 
 | Peça | Arquivo | Quem usa |
 |---|---|---|
-| Servidor | `rpgplay-server_0.5.0_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.5.0.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
-| Programa do Mestre | `RPG-Play-Mestre-Setup-0.5.0.exe` (Windows) ou `rpgplay-mestre_0.5.0_amd64.deb` (Linux) | O Mestre, no PC |
-| App dos jogadores | `RPG-Play-0.5.0.apk` | Cada jogador, no celular Android |
+| Servidor | `rpgplay-server_0.5.1_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.5.1.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
+| Programa do Mestre | `RPG-Play-Mestre-Setup-0.5.1.exe` (Windows) ou `rpgplay-mestre_0.5.1_amd64.deb` (Linux) | O Mestre, no PC |
+| App dos jogadores | `RPG-Play-0.5.1.apk` | Cada jogador, no celular Android |
 
 Baixe todos na página **[Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest)** do projeto.
 
@@ -36,7 +36,7 @@ Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador). Quem
 ### Instalar
 
 ```bash
-sudo apt install ./rpgplay-server_0.5.0_amd64.deb
+sudo apt install ./rpgplay-server_0.5.1_amd64.deb
 ```
 
 No fim, o instalador mostra os endereços, por exemplo:
@@ -167,7 +167,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 
 ### Windows
 
-1. Rode `RPG-Play-Mestre-Setup-0.5.0.exe`.
+1. Rode `RPG-Play-Mestre-Setup-0.5.1.exe`.
 2. O Windows pode avisar "O Windows protegeu o computador" (o instalador não tem certificado pago de assinatura). Clique em **Mais informações → Executar assim mesmo**.
 3. Escolha a pasta e conclua. O atalho "RPG Play Mestre" aparece no menu Iniciar e na área de trabalho.
 4. Se o Firewall do Windows perguntar, permita o acesso em **redes privadas** (é assim que ele acha o servidor).
@@ -175,7 +175,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 ### Linux
 
 ```bash
-sudo apt install ./rpgplay-mestre_0.5.0_amd64.deb
+sudo apt install ./rpgplay-mestre_0.5.1_amd64.deb
 ```
 
 O "RPG Play Mestre" aparece no menu de aplicativos.
@@ -190,7 +190,7 @@ Ao abrir, o programa procura o servidor na rede e já entra no painel do Mestre.
 
 ### Instalar o APK
 
-1. Passe o arquivo `RPG-Play-0.5.0.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
+1. Passe o arquivo `RPG-Play-0.5.1.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
 2. Toque no arquivo. O Android pede para **permitir a instalação de apps desta fonte**: autorize para o app que você usou para abrir o arquivo (Arquivos, Chrome, WhatsApp...).
 3. Se o **Play Protect** avisar que o app é desconhecido, toque em **Mais detalhes → Instalar mesmo assim**. Isso aparece porque o app não veio da Play Store.
 
@@ -238,14 +238,15 @@ flowchart LR
 1. Entre no painel com a conta de administrador (a primeira criada no servidor).
 2. Na lista de mesas, clique no **globo** (Internet) e escolha **Link rápido (Cloudflare)**.
 3. Espere a situação ficar **No ar**. Na primeira vez o servidor baixa o programa da Cloudflare (uns 40 MB).
-4. Pronto: aparecem o **link** (`https://…trycloudflare.com`) e o **código de acesso** (ex.: `K7QD-M2XP`).
+4. Pronto: aparece o **link** (`https://…trycloudflare.com`).
 
 **Convidar quem está longe:**
 
 1. Abra a mesa e clique em **Conectar celulares → Pela internet**.
-2. Clique em **Copiar convite** e mande no grupo (WhatsApp, Discord...). O convite traz um link `https://…/entrar?pin=…&code=…`. No celular, o botão **Abrir no app RPG Play** configura o servidor, preenche o código e já pede para entrar na mesa.
-3. O jogador cria a conta (o código de acesso já vem preenchido), escolhe o personagem e fica na **sala de espera**.
-4. Na mesa aparece uma faixa "Fulano quer entrar na mesa pela internet": **Aceitar** ou **Recusar**.
+2. Clique em **Copiar convite** e mande no grupo (WhatsApp, Discord...). O convite traz um link `https://…/entrar?pin=…`. No celular, o botão **Abrir no app RPG Play** configura o servidor no app.
+3. O jogador entra ou cria a conta e, se quiser, já cria o personagem. A conta não depende de mesa: o PIN do convite fica guardado na aba **Mesas**.
+4. Quando quiser, o jogador toca em **Entrar** na aba Mesas e fica na **sala de espera**.
+5. Na mesa aparece uma faixa "Fulano quer entrar na mesa pela internet": **Aceitar** ou **Recusar**.
 
 **As duas opções de link:**
 
@@ -267,7 +268,7 @@ Para desligar o link fixo: `sudo rpgplay-server internet desligar-fixo` (Linux) 
 
 **Segurança (o que muda com a internet ligada):**
 
-- Quem vem pela internet só **cria conta com o código de acesso**. Troque o código no painel se ele vazar (quem já tem conta continua entrando).
+- Criar conta e personagem é livre para quem tem o link; **entrar numa mesa** depende da sua aprovação. Quer fechar mais? No globo (Internet), ligue **Pedir código de acesso para criar conta pela internet**: o código (ex.: `K7QD-M2XP`) passa a ir no convite e só quem tem o código cria conta. Troque o código se ele vazar (quem já tem conta continua entrando).
 - A primeira conta do servidor (a do administrador) só pode ser criada na rede de casa.
 - As mesas abertas passam a **pedir aprovação** para quem entra pelo PIN (**Aprovar entrada**, em Conectar celulares). O Mestre pode desligar isso em cada mesa.
 - Tudo pela internet vai criptografado (https). Os IPs da sua casa não aparecem para quem está fora.
@@ -308,7 +309,8 @@ Dica: guarde o backup fora do servidor (pendrive ou outro PC) de vez em quando.
 | "Cadastro fechado" | `RPG_ALLOW_REGISTRATION=true` no `server.env` e reinicie o serviço |
 | Internet: "Com problema" no link rápido | Confira a internet do servidor. O servidor tenta de novo sozinho (e o link muda). Se o download do programa da Cloudflare falhar, veja se o antivírus ou um proxy bloqueiam o GitHub |
 | Internet: o jogador diz que o link não abre | O link rápido muda quando o servidor reinicia: mande o convite de novo (Conectar celulares → Pela internet). Para um link que não muda, use o link fixo (seção 5) |
-| "Código de acesso incorreto" | Confira o código no painel (globo). Maiúsculas/minúsculas e o traço não importam |
+| "Código de acesso incorreto" | Só aparece com **Pedir código de acesso** ligado no globo (Internet). Confira o código lá: tem 8 letras e números (não é o PIN da mesa); maiúsculas/minúsculas e o traço não importam. Se não precisar dele, desligue a opção |
+| Programa do Mestre (Windows) não acha o servidor nem com o IP digitado | Era um defeito da versão 0.5.0 e anteriores: atualize para a 0.5.1. Enquanto isso, abra `http://IP-DO-SERVIDOR:8080/mestre` no navegador |
 | "A porta 8081 (usada para jogar pela internet) está ocupada" | Outro programa usa a porta. Mude `RPG_INTERNET_PORT` no `server.env` (Linux) ou `servidor.env` (Windows); o jogo em casa continua funcionando |
 | O painel mostra "Painel do Mestre não foi instalado" | Servidor rodando a partir do código-fonte sem o painel compilado: `cd web && npm ci && npm run build` |
 

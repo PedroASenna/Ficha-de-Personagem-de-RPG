@@ -16,11 +16,14 @@ type ServerState = {
   pendingPin: string | null;
   /** Código de acesso vindo do convite: preenche a criação de conta pela internet. */
   pendingCode: string | null;
+  /** Mesa do convite: fica pronta na aba Mesas até o jogador entrar (ele pode criar o personagem antes). */
+  invitePin: string | null;
   restore: () => Promise<void>;
   choose: (server: ServerInfo) => Promise<void>;
   forget: () => Promise<void>;
   setPendingPin: (pin: string | null) => void;
   setPendingCode: (code: string | null) => void;
+  setInvitePin: (pin: string | null) => void;
 };
 
 export const useServer = create<ServerState>((set) => ({
@@ -28,6 +31,7 @@ export const useServer = create<ServerState>((set) => ({
   server: null,
   pendingPin: null,
   pendingCode: null,
+  invitePin: null,
   restore: async () => {
     let server: ServerInfo | null = null;
     try {
@@ -48,6 +52,7 @@ export const useServer = create<ServerState>((set) => ({
   },
   setPendingPin: (pendingPin) => set({ pendingPin }),
   setPendingCode: (pendingCode) => set({ pendingCode }),
+  setInvitePin: (invitePin) => set({ invitePin }),
 }));
 
 /** URL base do servidor atual (ex.: http://192.168.0.20:8080). */

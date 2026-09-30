@@ -55,12 +55,18 @@ def main() -> int:
             return response.json() if response.status_code == 200 else None
 
         info = wait("descoberta pela internet", discovery, 90)
-        assert info["access_code_required"] is True and info["addresses"] == [], info
+        assert info["access_code_required"] is False and info["addresses"] == [], info
+        # Criar conta pela internet é livre (as mesas pedem aprovação)...
         player = {"username": "longe", "password": "senha-de-longe", "display_name": "De Longe"}
-        denied = httpx.post(f"{url}/api/v1/auth/register", json=player, timeout=20)
-        assert denied.status_code == 403, denied.text
-        created = httpx.post(f"{url}/api/v1/auth/register", json={**player, "access_code": code}, timeout=20)
+        created = httpx.post(f"{url}/api/v1/auth/register", json=player, timeout=20)
         assert created.status_code == 201, created.text
+        # ...a não ser que o admin exija o código de acesso.
+        httpx.put(f"{LAN}/remote", json={"require_code": True}, headers=headers).raise_for_status()
+        other = {"username": "outro", "password": "senha-do-outro", "display_name": "Outro"}
+        denied = httpx.post(f"{url}/api/v1/auth/register", json=other, timeout=20)
+        assert denied.status_code == 403, denied.text
+        allowed = httpx.post(f"{url}/api/v1/auth/register", json={**other, "access_code": code}, timeout=20)
+        assert allowed.status_code == 201, allowed.text
         invite = httpx.get(f"{url}/entrar?pin=ABC123", timeout=20)
         assert invite.status_code == 200 and "rpgplay://join" in invite.text
         print("OK: link rápido da Cloudflare funcionando (descoberta, código de acesso e convite).")

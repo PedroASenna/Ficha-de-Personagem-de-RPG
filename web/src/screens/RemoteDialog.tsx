@@ -12,6 +12,7 @@ import IconButton from "@mui/material/IconButton";
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -109,6 +110,11 @@ function RemoteContent() {
     },
     onError: toast.error,
   });
+  const codeSwitch = useMutation({
+    mutationFn: (value: boolean) => api<RemoteView>("/remote", { method: "PUT", json: { require_code: value } }),
+    onSuccess: update,
+    onError: toast.error,
+  });
   const check = useMutation({
     mutationFn: () => api<RemoteView>("/remote/check", { method: "POST" }),
     onSuccess: update,
@@ -123,8 +129,8 @@ function RemoteContent() {
   return (
     <Stack spacing={2.5}>
       <Typography color="text.secondary">
-        Quem está longe joga pelo celular com um link <b>https</b>, de graça, sem abrir portas no roteador. Criar conta
-        pela internet pede o <b>código de acesso</b> abaixo, e nas mesas quem entra pelo PIN espera você aceitar.
+        Quem está longe joga pelo celular com um link <b>https</b>, de graça, sem abrir portas no roteador. A pessoa
+        cria a conta e o personagem, e nas mesas quem entra pelo PIN espera você aceitar.
       </Typography>
       <RadioGroup
         value={setMode.isPending ? setMode.variables : view.mode}
@@ -190,25 +196,47 @@ function RemoteContent() {
       )}
 
       <Box>
-        <Typography variant="overline" color="text.secondary">
-          Código de acesso (para criar conta pela internet)
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-          <Typography variant="h5" sx={{ fontFamily: "monospace", letterSpacing: 3 }} data-testid="access-code">
-            {view.access_code}
-          </Typography>
-          <CopyButton text={view.access_code} what="Código" />
-          <Button
-            size="small"
-            onClick={() => window.confirm("Trocar o código de acesso? O antigo para de valer.") && newCode.mutate()}
-            loading={newCode.isPending}
-          >
-            Trocar código
-          </Button>
-        </Stack>
-        <Typography variant="body2" color="text.secondary">
-          Quem já tem conta não precisa dele. Troque se o código vazar.
-        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={codeSwitch.isPending ? Boolean(codeSwitch.variables) : view.require_code}
+              onChange={(event) => codeSwitch.mutate(event.target.checked)}
+            />
+          }
+          label={
+            <Box>
+              <Typography>Pedir código de acesso para criar conta pela internet</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Desligado, quem tem o link cria a conta e o personagem livremente; a mesa continua pedindo sua aprovação
+                para entrar.
+              </Typography>
+            </Box>
+          }
+          sx={{ alignItems: "flex-start", "& .MuiSwitch-root": { mt: -0.5 } }}
+        />
+        {view.require_code && (
+          <Box sx={{ mt: 1.5, ml: 6 }}>
+            <Typography variant="overline" color="text.secondary">
+              Código de acesso
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <Typography variant="h5" sx={{ fontFamily: "monospace", letterSpacing: 3 }} data-testid="access-code">
+                {view.access_code}
+              </Typography>
+              <CopyButton text={view.access_code} what="Código" />
+              <Button
+                size="small"
+                onClick={() => window.confirm("Trocar o código de acesso? O antigo para de valer.") && newCode.mutate()}
+                loading={newCode.isPending}
+              >
+                Trocar código
+              </Button>
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Vai junto no convite. Quem já tem conta não precisa dele. Troque se o código vazar.
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Stack>
   );

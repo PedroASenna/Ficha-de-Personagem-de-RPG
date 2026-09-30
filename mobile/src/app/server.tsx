@@ -93,7 +93,8 @@ export default function ServerScreen() {
           RPG Play
         </Text>
         <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
-          Vamos achar o servidor da mesa aqui no Wi-Fi.
+          Primeiro, o servidor do Mestre: no Wi-Fi de casa ou pelo link que ele mandou. Depois você entra, cria o
+          personagem e escolhe a mesa quando quiser.
         </Text>
       </View>
 
@@ -126,12 +127,12 @@ export default function ServerScreen() {
       </Card>
 
       <Card mode="outlined">
-        <Card.Title title="Ou digite o endereço" subtitle="O Mestre vê no painel, em “Conectar celulares”" />
+        <Card.Title title="Ou digite o endereço" subtitle="O IP de casa ou o link https da internet" />
         <Card.Content style={{ gap: 8 }}>
           <TextInput
             mode="outlined"
             label="Endereço do servidor"
-            placeholder="192.168.0.20:8080"
+            placeholder="192.168.0.20:8080 ou https://…"
             value={address}
             onChangeText={setAddress}
             autoCapitalize="none"

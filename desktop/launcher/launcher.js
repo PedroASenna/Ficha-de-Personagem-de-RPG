@@ -15,11 +15,24 @@ function showError(message) {
   errorBox.hidden = !message;
 }
 
+/** Chamada ao programa; se algo der errado, mostra na tela em vez de ficar parado sem dizer nada. */
+async function call(fn, ...args) {
+  try {
+    return await fn(...args);
+  } catch (error) {
+    const detail =
+      error && error.message
+        ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "")
+        : String(error);
+    return { error: `O programa não conseguiu fazer isso (${detail}). Feche e abra de novo.` };
+  }
+}
+
 async function connect(url, button) {
   showError("");
   if (button) button.disabled = true;
   statusLine.textContent = `Abrindo ${url}…`;
-  const result = await api.connect(url);
+  const result = await call(api.connect, url);
   if (result && result.error) {
     showError(result.error);
     statusLine.textContent = "";
@@ -59,8 +72,10 @@ async function search() {
   searchButton.disabled = true;
   statusLine.textContent = "Procurando servidores na rede…";
   list.replaceChildren();
-  const last = await api.lastServer();
-  const servers = await api.discover();
+  const last = await call(api.lastServer);
+  const found = await call(api.discover);
+  const servers = Array.isArray(found) ? found : [];
+  if (found && found.error) showError(found.error);
   searchButton.disabled = false;
   render(servers, last && last.serverId);
   statusLine.textContent =
@@ -69,17 +84,19 @@ async function search() {
       : servers.length === 1
         ? "1 servidor encontrado."
         : `${servers.length} servidores encontrados.`;
-  return { servers, last };
+  return { servers, last: last && !last.error ? last : null };
 }
 
 async function start() {
   if (params.get("erro")) showError(params.get("erro"));
   const autoConnect = !params.get("erro") && !params.get("trocar");
   // Abre direto o último servidor usado, se ele estiver respondendo.
-  const last = await api.lastServer();
+  const saved = await call(api.lastServer);
+  const last = saved && !saved.error ? saved : null;
+  if (saved && saved.error) showError(saved.error);
   if (autoConnect && last) {
     statusLine.textContent = `Conectando em ${last.name}…`;
-    const alive = await api.probe(last.url);
+    const alive = await call(api.probe, last.url);
     if (alive && !alive.error) {
       await connect(last.url);
       return;
@@ -93,7 +110,7 @@ searchButton.addEventListener("click", () => void search());
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   showError("");
-  const result = await api.probe(addressInput.value);
+  const result = await call(api.probe, addressInput.value);
   if (result.error) showError(result.error);
   else await connect(result.url);
 });

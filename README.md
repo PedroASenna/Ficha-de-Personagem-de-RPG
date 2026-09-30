@@ -13,7 +13,7 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Wi
 - **Testes da ficha com um toque:** no celular e no painel, a perícia já rola do jeito certo para o sistema (o NH ou o dado vem pronto do servidor).
 - **Ângulo ajustável** em toda imagem enviada.
 - **Contas locais** (usuário e senha no servidor) e **campanhas salvas**: arquivar e reabrir de onde parou.
-- **Jogar pela internet de graça**, sem abrir portas no roteador (Cloudflare Quick Tunnel ou Tailscale Funnel), com **código de acesso** para criar conta e **sala de espera**: o Mestre aceita ou recusa quem entra na mesa.
+- **Jogar pela internet de graça**, sem abrir portas no roteador (Cloudflare Quick Tunnel ou Tailscale Funnel), **sala de espera** (o Mestre aceita ou recusa quem entra na mesa) e, se quiser, **código de acesso** para criar conta. Quem joga de longe cria a conta e o personagem antes de procurar a mesa.
 
 | Peça | Instalador | Tecnologia |
 |---|---|---|
@@ -91,7 +91,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 
 ## Verificação feita
 
-- **Servidor:** 192 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+- **Servidor:** 193 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
   - contas locais e admin;
   - descoberta HTTP e UDP;
   - campanhas arquivadas e reabertas;
@@ -107,7 +107,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - `/health`, `/mestre`, descoberta por **broadcast UDP** e smoke test;
   - `reset-password`, `backup` e `restore` pelo comando `rpgplay-server`;
   - atualização mantendo o `server.env`, `remove` mantendo as campanhas e `purge` apagando tudo.
-- **Painel do Mestre:** 50 testes Vitest. Um teste Playwright liga a internet pelo painel (com um `cloudflared` de mentira), confere o link, o código e o convite, e recebe dois jogadores pela porta de internet: um criado com o código e aceito pela faixa "quer entrar na mesa", outro recusado. Dois testes Playwright abrem mesas de GURPS e de Savage Worlds: o Mestre rola a perícia pela ficha (NH 17 no GURPS; dado + Dado Selvagem no Savage) e dá pontos/XP, conferindo o que chega à jogadora. Outro teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
+- **Painel do Mestre:** 51 testes Vitest. Um teste Playwright liga a internet pelo painel (com um `cloudflared` de mentira) e confere o link e o convite. Pela porta de internet, um jogador cria a conta e o personagem sem código e sem mesa, pede para entrar e é aceito pela faixa "quer entrar na mesa". Depois o admin liga o código de acesso, o cadastro sem ele passa a ser recusado e um segundo jogador, criado com o código, é recusado na mesa. Dois testes Playwright abrem mesas de GURPS e de Savage Worlds: o Mestre rola a perícia pela ficha (NH 17 no GURPS; dado + Dado Selvagem no Savage) e dá pontos/XP, conferindo o que chega à jogadora. Outro teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
   - criar conta e mesa;
   - enviar um mapa;
   - receber a jogadora ao vivo;
@@ -127,7 +127,7 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - o servidor instalado respondendo (HTTP, painel, descoberta UDP, cadastro) com o `servidor.env`;
   - o diagnóstico, o aviso de porta em uso e o `liberar-firewall`;
   - a desinstalação mantendo as campanhas.
-- **Programa do Mestre:** 8 testes Vitest e um Playwright + Electron que roda contra o código **e** contra o `.deb` instalado:
+- **Programa do Mestre:** 11 testes Vitest (inclusive o reconhecimento da tela de escolha do servidor com caminhos do Windows) e um Playwright + Electron que roda contra o código, contra o `.deb` instalado e, no CI, contra o programa empacotado num Windows de verdade:
   - acha o servidor sozinho por UDP;
   - isola o painel;
   - bloqueia navegação para fora;
@@ -135,13 +135,12 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - aceita o IP digitado.
 
   O `.exe` (NSIS) foi gerado aqui com wine, com ícone e metadados conferidos.
-- **App:** 124 testes Jest (link com código de acesso, sala de espera, ficha de GURPS e Savage, dados que explodem, texto dos testes, descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
+- **App:** 127 testes Jest (convite guardado na aba Mesas sem entrar sozinho na mesa, link com código de acesso, sala de espera, ficha de GURPS e Savage, dados que explodem, texto dos testes, descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
 - **Não verificado aqui:**
   - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
-  - o `.exe` do **programa do Mestre** não rodou num Windows de verdade (o do servidor roda no CI);
   - a descoberta não foi testada num **Wi-Fi real** com celulares;
   - a imagem Docker não foi gerada (Docker Hub bloqueado aqui);
-  - os **túneis de verdade** (Cloudflare e Tailscale) não rodaram aqui (este ambiente não alcança a Cloudflare nem o GitHub para baixar o `cloudflared`): os testes usam programas de mentira que imitam a saída dos verdadeiros.
+  - os **túneis de verdade** não rodam aqui (este ambiente não alcança a Cloudflare): o link rápido da Cloudflare é testado de verdade no CI, no Linux e no servidor instalado no Windows; o link fixo (Tailscale) não tem teste real, porque precisa de uma conta.
 
 ## Próximos passos sugeridos
 

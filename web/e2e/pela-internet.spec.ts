@@ -27,7 +27,7 @@ let adminToken = "";
 
 test.afterAll(async ({ baseURL }) => {
   // Desliga de novo: com a internet ligada as mesas novas dos outros testes pediriam aprovação.
-  if (adminToken) await call(baseURL as string, "/remote", { mode: "off" }, adminToken, "PUT");
+  if (adminToken) await call(baseURL as string, "/remote", { mode: "off", require_code: false }, adminToken, "PUT");
 });
 
 test("pela internet: código de acesso e o Mestre aceita quem entra", async ({ page, baseURL }) => {
@@ -46,13 +46,13 @@ test("pela internet: código de acesso e o Mestre aceita quem entra", async ({ p
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   adminToken = (await call(base, "/auth/login", { username, password })).body.access_token as string;
 
-  // Liga o link rápido.
+  // Liga o link rápido. Por padrão criar conta é livre: o código de acesso fica escondido.
   await page.getByRole("button", { name: "Internet" }).click();
   await page.getByRole("radio", { name: /Link rápido/ }).click();
   await expect(page.getByTestId("remote-status")).toHaveText("No ar");
   await expect(page.getByTestId("remote-url")).toHaveText("https://e2e-mesa.trycloudflare.com");
-  const code = ((await page.getByTestId("access-code").textContent()) ?? "").trim();
-  expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  await expect(page.getByRole("switch", { name: /Pedir código de acesso/ })).not.toBeChecked();
+  await expect(page.getByTestId("access-code")).toBeHidden();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "e2e-screenshots/internet-ligada.png" });
   await page.getByRole("button", { name: "Fechar" }).click();
 
@@ -66,26 +66,29 @@ test("pela internet: código de acesso e o Mestre aceita quem entra", async ({ p
   await page.getByRole("button", { name: "Conectar celulares" }).click();
   await page.getByRole("tab", { name: "Pela internet" }).click();
   await expect(page.getByTestId("internet-url")).toHaveText("https://e2e-mesa.trycloudflare.com");
-  await expect(page.getByTestId("internet-code")).toHaveText(code);
+  await expect(page.getByTestId("internet-pin")).toHaveText(pin);
+  await expect(page.getByTestId("internet-code")).toBeHidden();
   await expect(page.getByRole("switch", { name: /Aprovar entrada/ })).toBeChecked();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "e2e-screenshots/internet-convite.png" });
   await page.getByRole("button", { name: "Fechar" }).click();
 
-  // De fora: sem o código não cria conta.
+  // De fora: cria a conta e o personagem sem código e sem mesa.
   const player = { username: `leo_${Date.now() % 1000000}`, password: "senha-do-leo", display_name: "Leo" };
-  expect((await call(remote, "/auth/register", player)).status).toBe(403);
   const info = await call(remote, "/discovery", undefined, undefined, "GET");
-  expect(info.body).toEqual(expect.objectContaining({ access_code_required: true, addresses: [] }));
-  const signed = await call(remote, "/auth/register", { ...player, access_code: code.toLowerCase() });
+  expect(info.body).toEqual(expect.objectContaining({ access_code_required: false, addresses: [] }));
+  const signed = await call(remote, "/auth/register", player);
   expect(signed.status).toBe(201);
   const token = signed.body.access_token as string;
+  const hero = await call(remote, "/characters/quick", { ruleset_id: "srd-5.1", name: "Viajante" }, token);
+  expect(hero.status).toBe(201);
 
-  // Pede para entrar e espera.
-  const join = await call(remote, "/rooms/join", { pin }, token);
+  // Depois procura a mesa: pede para entrar e espera o Mestre.
+  const join = await call(remote, "/rooms/join", { pin, character_id: hero.body.id }, token);
   expect(join.status).toBe(409);
   expect(join.body.code).toBe("join_pending");
   const requests = page.getByTestId("join-requests");
   await expect(requests).toContainText("Leo");
+  await expect(requests).toContainText("com Viajante");
   await expect(requests).toContainText("pela internet");
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "e2e-screenshots/internet-pedido.png" });
 
@@ -94,14 +97,26 @@ test("pela internet: código de acesso e o Mestre aceita quem entra", async ({ p
   const status = await call(remote, `/rooms/join-status?pin=${pin}`, undefined, token, "GET");
   expect(status.body.status).toBe("approved");
 
-  // Outro pede e é recusado.
-  const other = await call(remote, "/auth/register", {
-    username: `ivo_${Date.now() % 1000000}`,
-    password: "senha-do-ivo",
-    display_name: "Ivo",
-    access_code: code,
-  });
+  // O admin passa a exigir o código de acesso (pelo botão da própria mesa).
+  await page.getByRole("button", { name: "Conectar celulares" }).click();
+  await page.getByRole("tab", { name: "Pela internet" }).click();
+  await page.getByRole("button", { name: "Configurar acesso pela internet" }).click();
+  await page.getByRole("switch", { name: /Pedir código de acesso/ }).click();
+  const code = ((await page.getByTestId("access-code").textContent()) ?? "").trim();
+  expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  await page.getByRole("dialog", { name: "Jogar pela internet" }).getByRole("button", { name: "Fechar" }).click();
+  await expect(page.getByTestId("internet-code")).toHaveText(code);
+  await page.getByRole("dialog", { name: "Conectar celulares" }).getByRole("button", { name: "Fechar" }).click();
+
+  const ivo = { username: `ivo_${Date.now() % 1000000}`, password: "senha-do-ivo", display_name: "Ivo" };
+  const refused = await call(remote, "/auth/register", ivo);
+  expect(refused.status).toBe(403);
+  expect(refused.body.code).toBe("access_code");
+  const other = await call(remote, "/auth/register", { ...ivo, access_code: code.toLowerCase() });
+  expect(other.status).toBe(201);
   const otherToken = other.body.access_token as string;
+
+  // Outro pede e é recusado.
   expect((await call(remote, "/rooms/join", { pin }, otherToken)).status).toBe(409);
   await page.getByTestId("join-requests").getByRole("button", { name: "Recusar" }).click();
   await expect(page.getByTestId("join-requests")).toBeHidden();

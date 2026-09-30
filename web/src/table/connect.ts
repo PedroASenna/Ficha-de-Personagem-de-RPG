@@ -24,16 +24,18 @@ export function joinLink(server: string, pin: string, code?: string | null): str
 }
 
 /** Página de convite do servidor (https, clicável no WhatsApp): o botão dela abre o app já com tudo. */
-export function inviteUrl(server: string, pin: string, code: string): string {
-  return `${server.replace(/\/$/, "")}/entrar?pin=${encodeURIComponent(pin)}&code=${encodeURIComponent(code)}`;
+export function inviteUrl(server: string, pin: string, code?: string | null): string {
+  const url = `${server.replace(/\/$/, "")}/entrar?pin=${encodeURIComponent(pin)}`;
+  return code ? `${url}&code=${encodeURIComponent(code)}` : url;
 }
 
 /** Texto pronto para mandar no grupo (WhatsApp, Discord...) para quem joga de longe. */
-export function inviteText(server: string, pin: string, code: string): string {
+export function inviteText(server: string, pin: string, code?: string | null): string {
+  const typed = [`endereço ${server}`, ...(code ? [`código de acesso ${code}`] : []), `PIN ${pin}`].join(" · ");
   return [
     "Bora jogar RPG! Abra este link no celular:",
     inviteUrl(server, pin, code),
     "",
-    `Se preferir digitar no app RPG Play: endereço ${server} · código de acesso ${code} · PIN ${pin}`,
+    `Se preferir digitar no app RPG Play: ${typed}`,
   ].join("\n");
 }

@@ -16,6 +16,7 @@ import {
 
 import { ConfigStore } from "./config";
 import { DEFAULT_DISCOVERY_PORT, discover, normalizeServerUrl, probe, type ServerInfo } from "./discovery";
+import { isLauncherUrl } from "./launcher-path";
 
 const LAUNCHER = path.join(__dirname, "..", "launcher", "index.html");
 const ICON = path.join(__dirname, "..", "launcher", "icon.png");
@@ -26,14 +27,7 @@ let currentOrigin: string | null = null;
 let config: ConfigStore;
 
 function isLauncher(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return (
-      parsed.protocol === "file:" && path.normalize(decodeURIComponent(parsed.pathname)) === path.normalize(LAUNCHER)
-    );
-  } catch {
-    return false;
-  }
+  return isLauncherUrl(url, LAUNCHER);
 }
 
 function isAllowed(url: string): boolean {
