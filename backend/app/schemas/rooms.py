@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -11,6 +11,12 @@ class RoomCreate(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     ruleset_id: str = Field(max_length=64)
     max_players: int = Field(default=8, ge=1, le=12)
+    # Vazio = liga sozinho quando o servidor está aberto na internet.
+    require_approval: bool | None = None
+
+
+class RoomPatch(BaseModel):
+    require_approval: bool | None = None
 
 
 class RoomJoin(BaseModel):
@@ -62,6 +68,24 @@ class RoomOut(BaseModel):
     members: list[RoomMemberOut]
     created_at: datetime
     last_activity_at: datetime | None = None
+    # Quem entra pelo PIN espera o Mestre aceitar; pending_requests só vem preenchido para o Mestre.
+    require_approval: bool = False
+    pending_requests: int = 0
+
+
+class JoinRequestOut(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    display_name: str
+    character_name: str | None = None
+    # Pediu pela internet (não está na rede de casa).
+    remote: bool = False
+    requested_at: datetime
+
+
+class JoinStatusOut(BaseModel):
+    status: Literal["pending", "approved", "denied"]
+    room: RoomOut | None = None
 
 
 class EventOut(BaseModel):

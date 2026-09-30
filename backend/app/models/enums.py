@@ -44,6 +44,11 @@ class RoomStatus(StrEnum):
     CLOSED = "closed"
 
 
+class JoinRequestStatus(StrEnum):
+    PENDING = "pending"
+    DENIED = "denied"
+
+
 class RoomRole(StrEnum):
     MASTER = "master"
     PLAYER = "player"

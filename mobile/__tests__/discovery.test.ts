@@ -1,4 +1,13 @@
-import { normalizeServerUrl, parseJoinLink, probe, scanSubnet, subnetHosts, unreachableHelp } from '../src/lib/discovery';
+import {
+  normalizeAccessCode,
+  normalizeServerUrl,
+  parseJoinLink,
+  probe,
+  probeTimeout,
+  scanSubnet,
+  subnetHosts,
+  unreachableHelp,
+} from '../src/lib/discovery';
 
 describe('endereço do servidor', () => {
   it('normaliza o que o jogador digita', () => {
@@ -25,11 +34,28 @@ describe('endereço do servidor', () => {
     expect(parseJoinLink('rpgplay://join?server=http%3A%2F%2F192.168.0.20%3A8080&pin=abc123')).toEqual({
       server: 'http://192.168.0.20:8080',
       pin: 'ABC123',
+      code: null,
     });
-    expect(parseJoinLink('rpgplay://join?server=192.168.0.20')).toEqual({ server: 'http://192.168.0.20:8080', pin: null });
-    expect(parseJoinLink('rpgplay://join?server=192.168.0.20&pin=curto')).toEqual({ server: 'http://192.168.0.20:8080', pin: null });
+    expect(parseJoinLink('rpgplay://join?server=192.168.0.20')).toEqual({ server: 'http://192.168.0.20:8080', pin: null, code: null });
+    expect(parseJoinLink('rpgplay://join?server=192.168.0.20&pin=curto')).toEqual({
+      server: 'http://192.168.0.20:8080',
+      pin: null,
+      code: null,
+    });
     expect(parseJoinLink('https://exemplo.com/?server=x')).toBeNull();
     expect(parseJoinLink('rpgplay://join?pin=ABC123')).toBeNull();
+  });
+
+  it('pela internet: link https com o código de acesso', () => {
+    expect(
+      parseJoinLink('rpgplay://join?server=https%3A%2F%2Fmesa-abc.trycloudflare.com&pin=ABC123&code=abcd-efgh'),
+    ).toEqual({ server: 'https://mesa-abc.trycloudflare.com', pin: 'ABC123', code: 'ABCD-EFGH' });
+    expect(parseJoinLink('rpgplay://join?server=https%3A%2F%2Fx.ts.net&code=curto')?.code).toBeNull();
+    expect(normalizeAccessCode(' abcdefgh ')).toBe('ABCD-EFGH');
+    expect(normalizeAccessCode('ABCD-EFG')).toBeNull();
+    expect(probeTimeout('https://mesa-abc.trycloudflare.com')).toBeGreaterThan(probeTimeout('http://192.168.0.20:8080'));
+    expect(unreachableHelp('https://mesa-abc.trycloudflare.com')).toMatch(/link atual/);
+    expect(unreachableHelp('http://192.168.0.20:8080')).toMatch(/diagnostico/);
   });
 });
 
@@ -57,9 +83,19 @@ describe('varredura da rede', () => {
       version: '0.2.0',
       serverId: 'abc',
       registrationOpen: false,
+      accessCodeRequired: false,
     });
     await expect(probe('http://10.0.0.6:8080', 500, fetchImpl)).resolves.toBeNull();
     await expect(probe('http://10.0.0.7:8080', 500, fetchImpl)).resolves.toBeNull();
+  });
+
+  it('avisa quando criar conta pede o código (conexão pela internet)', async () => {
+    const fetchImpl = fakeFetch({
+      'https://mesa.trycloudflare.com/api/v1/discovery': { ...casa, registration_open: true, access_code_required: true },
+    });
+    const info = await probe('https://mesa.trycloudflare.com', 500, fetchImpl);
+    expect(info?.accessCodeRequired).toBe(true);
+    expect(info?.registrationOpen).toBe(true);
   });
 
   it('acha o servidor na rede e avisa o progresso', async () => {

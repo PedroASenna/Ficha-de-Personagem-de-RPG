@@ -6,6 +6,7 @@
     rpgplay-server make-admin USUARIO
     rpgplay-server backup ARQUIVO.tar.gz     # banco SQLite + imagens (mapas, retratos)
     rpgplay-server purge                     # retenção (log antigo, contas excluídas, campanhas abandonadas)
+    rpgplay-server internet [fixo|desligar-fixo]   # jogar pela internet: link, código e o link fixo (Tailscale)
 
 Configuração: variáveis RPG_* (no pacote .deb, em /etc/rpgplay/server.env; no Windows, em
 C:\\ProgramData\\RPG Play\\servidor\\servidor.env).
@@ -13,10 +14,12 @@ C:\\ProgramData\\RPG Play\\servidor\\servidor.env).
 
 import argparse
 import asyncio
+import json
 import os
 import secrets
 import socket
 import sqlite3
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -103,11 +106,41 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if IS_WINDOWS:
         # No Linux o expurgo diário é um timer do systemd; no Windows ele roda a cada abertura do servidor.
         _purge(settings)
+    settings = _check_internet_port(settings)
     _print_info(settings)
     if IS_WINDOWS:
         print("\nDeixe esta janela aberta enquanto jogam. Para desligar o servidor, feche a janela.\n")
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level="info")
+    # Duas portas: a da rede de casa e, só em 127.0.0.1, a que os túneis da internet usam (app/core/origin.py).
+    sockets = [_listen(settings.host, settings.port)]
+    if settings.internet_enabled:
+        sockets.append(_listen("127.0.0.1", settings.remote_port))
+    server = uvicorn.Server(uvicorn.Config(create_app(settings), log_level="info"))
+    server.run(sockets=sockets)
     return 0
+
+
+def _listen(host: str, port: int) -> socket.socket:
+    sock = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_STREAM)
+    if not IS_WINDOWS:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    sock.set_inheritable(True)
+    return sock
+
+
+def _check_internet_port(settings: Settings) -> Settings:
+    """A porta de internet ocupada não impede o jogo em casa: o servidor abre sem a opção de internet."""
+    if not settings.internet_enabled:
+        return settings
+    port = settings.remote_port
+    if port != settings.port and port_available("127.0.0.1", port):
+        return settings
+    print(
+        f"Aviso: a porta {port} (usada para jogar pela internet) está ocupada. O servidor abre só para a rede"
+        " de casa. Para usar outra, mude RPG_INTERNET_PORT na configuração.",
+        file=sys.stderr,
+    )
+    return settings.model_copy(update={"internet_enabled": False})
 
 
 async def _with_session(settings: Settings, fn):  # noqa: ANN001
@@ -429,6 +462,117 @@ def cmd_liberar_firewall(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------- internet ----------
+
+TAILSCALE_INSTALL = (
+    "Instale o Tailscale (grátis): https://tailscale.com/download/windows e entre na sua conta pelo ícone na"
+    " bandeja, perto do relógio. Depois abra este atalho de novo."
+    if IS_WINDOWS
+    else "Instale o Tailscale (grátis) com:\n    curl -fsSL https://tailscale.com/install.sh | sh\n"
+    "e rode de novo: sudo rpgplay-server internet fixo"
+)
+MODE_NAMES = {"off": "desligado", "quick": "link rápido (Cloudflare)", "fixed": "link fixo (Tailscale)"}
+
+
+def _tailscale(binary: str, *args: str, capture: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(  # noqa: S603 - o binário é o tailscale instalado pelo usuário
+        [binary, *args], capture_output=capture, text=True, check=False
+    )
+
+
+def _tailscale_status(binary: str) -> dict:
+    result = _tailscale(binary, "status", "--json")
+    try:
+        return json.loads(result.stdout or "{}")
+    except ValueError:
+        return {}
+
+
+def _internet_status(settings: Settings) -> int:
+    from app.services.remote import RemoteAccess
+
+    remote = RemoteAccess(settings)
+    data = remote._load()
+    mode = data.get("mode") or "off"
+    print(f"Jogar pela internet: {MODE_NAMES.get(mode, mode)}")
+    if not settings.internet_enabled:
+        print("  (desligado na configuração: RPG_INTERNET_ENABLED=false)")
+    if mode != "off":
+        url = data.get("current_url")
+        print(f"  link agora:        {url or 'abrindo… (confira no painel do Mestre, em Internet)'}")
+        print(f"  código de acesso:  {remote.access_code}")
+    if data.get("fixed_url"):
+        print(f"  link fixo:         {data['fixed_url']}")
+    print(f"  porta de internet: 127.0.0.1:{settings.remote_port} (não precisa abrir no roteador)")
+    print("\nLigue, desligue e troque o código no painel do Mestre, no botão Internet.")
+    print(
+        "Link fixo (não muda nunca): "
+        + (
+            "atalho “Link fixo pela internet (Tailscale)” no menu Iniciar."
+            if IS_WINDOWS
+            else "sudo rpgplay-server internet fixo"
+        )
+    )
+    return 0
+
+
+def _internet_fixo(settings: Settings) -> int:
+    from app.services.remote import RemoteAccess, tailscale_dns_url
+
+    binary = RemoteAccess(settings).tailscale_binary()
+    if binary is None:
+        print("O Tailscale não está instalado neste computador.\n" + TAILSCALE_INSTALL)
+        return 1
+    if not IS_WINDOWS and not _is_root():
+        print("Rode com sudo: sudo rpgplay-server internet fixo", file=sys.stderr)
+        return 1
+    status = _tailscale_status(binary)
+    if status.get("BackendState") != "Running":
+        if IS_WINDOWS:
+            print(
+                "Entre na sua conta do Tailscale pelo ícone na bandeja (perto do relógio) e abra este atalho de novo."
+            )
+            return 1
+        print("Entre na sua conta do Tailscale (grátis). Abra o link que aparecer abaixo no navegador:")
+        if _tailscale(binary, "up", capture=False).returncode != 0:
+            return 1
+        status = _tailscale_status(binary)
+    print(f"Ligando o Funnel do Tailscale para a porta de internet {settings.remote_port}…")
+    print("(Se aparecer um link pedindo para ativar o Funnel, abra no navegador e confirme.)")
+    if _tailscale(binary, "funnel", "--bg", str(settings.remote_port), capture=False).returncode != 0:
+        print("O Tailscale não ligou o Funnel. Veja a mensagem acima.", file=sys.stderr)
+        return 1
+    url = tailscale_dns_url(_tailscale_status(binary))
+    print(f"\nPronto! Link fixo: {url or '(confira no aplicativo do Tailscale)'}")
+    print("Agora, no painel do Mestre, abra Internet e escolha “Link fixo”.")
+    return 0
+
+
+def _internet_desligar_fixo(settings: Settings) -> int:
+    from app.services.remote import RemoteAccess
+
+    binary = RemoteAccess(settings).tailscale_binary()
+    if binary is None:
+        print("O Tailscale não está instalado: não há link fixo para desligar.")
+        return 0
+    if not IS_WINDOWS and not _is_root():
+        print("Rode com sudo: sudo rpgplay-server internet desligar-fixo", file=sys.stderr)
+        return 1
+    if _tailscale(binary, "funnel", "reset", capture=False).returncode != 0:
+        return 1
+    print("Link fixo desligado. No painel do Mestre, em Internet, escolha “Desligado” ou “Link rápido”.")
+    return 0
+
+
+def cmd_internet(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    if args.acao == "fixo":
+        return _internet_fixo(settings)
+    if args.acao == "desligar-fixo":
+        return _internet_desligar_fixo(settings)
+    return _internet_status(settings)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rpgplay-server", description="Servidor RPG Play da casa")
     sub = parser.add_subparsers(dest="command")
@@ -449,6 +593,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser(
         "liberar-firewall", help="libera o servidor no firewall (ufw, firewalld ou do Windows) só para a rede de casa"
     )
+    internet = sub.add_parser("internet", help="jogar pela internet: mostra o link e o código; liga o link fixo")
+    internet.add_argument("acao", nargs="?", choices=["status", "fixo", "desligar-fixo"], default="status")
     args = parser.parse_args(argv)
     handlers = {
         "serve": cmd_serve,
@@ -460,6 +606,7 @@ def main(argv: list[str] | None = None) -> int:
         "info": cmd_info,
         "diagnostico": cmd_diagnostico,
         "liberar-firewall": cmd_liberar_firewall,
+        "internet": cmd_internet,
         None: cmd_serve,
     }
     if args.command is None:

@@ -298,3 +298,9 @@ async def world_updated(state: AppState, session: AsyncSession, room: Room) -> N
     if players:
         public = await world_service.world_view(session, room, state.media, master=False)
         await _to(state, room, players, "world.updated", world=public)
+
+
+async def join_requests(state: AppState, session: AsyncSession, room: Room) -> None:
+    """Pedidos de entrada mudaram (novo, aceito ou recusado): o Mestre recebe a lista pendente inteira."""
+    pending = await room_service.pending_requests(session, room)
+    await _to_master(state, room, "join.requests", requests=[r.model_dump(mode="json") for r in pending])

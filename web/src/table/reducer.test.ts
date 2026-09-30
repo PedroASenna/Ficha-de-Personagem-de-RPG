@@ -222,6 +222,21 @@ describe("tableReducer", () => {
     expect(state.room?.status).toBe("closed");
   });
 
+  it("guarda os pedidos de entrada (lista inteira a cada evento)", () => {
+    const request = {
+      user_id: "user-beto",
+      username: "beto",
+      display_name: "Beto",
+      character_name: null,
+      remote: true,
+      requested_at: "2026-09-30T12:00:00Z",
+    };
+    let state = tableReducer(loaded(), { type: "join.requests", requests: [request] });
+    expect(state.requests.map((r) => r.display_name)).toEqual(["Beto"]);
+    state = tableReducer(state, { type: "join.requests", requests: [] });
+    expect(state.requests).toEqual([]);
+  });
+
   it("ordena bonecos: z maior por cima, personagens sobre inimigos no empate", () => {
     const state = tableReducer(loaded(), {
       type: "token.upserted",

@@ -25,6 +25,43 @@ export interface Discovery {
   registration_open: boolean;
   master_path: string;
   addresses: string[];
+  /** O Mestre ligou o acesso pela internet. */
+  internet?: boolean;
+  /** Esta conexão veio pela internet: criar conta pede o código de acesso. */
+  access_code_required?: boolean;
+}
+
+export type RemoteMode = "off" | "quick" | "fixed";
+export type RemoteStatus = "off" | "downloading" | "starting" | "on" | "error";
+
+/** Acesso pela internet (só o admin): GET/PUT /remote. */
+export interface RemoteView {
+  mode: RemoteMode;
+  status: RemoteStatus;
+  url: string | null;
+  fixed_url: string | null;
+  error: string | null;
+  access_code: string;
+  internet_port: number;
+  available: boolean;
+}
+
+/** O que o Mestre passa para quem joga de longe: GET /remote/share. */
+export interface RemoteShare {
+  enabled: boolean;
+  status: RemoteStatus;
+  url: string | null;
+  access_code: string | null;
+}
+
+/** Pedido de entrada numa mesa com "Aprovar entrada". */
+export interface JoinRequest {
+  user_id: string;
+  username: string;
+  display_name: string;
+  character_name: string | null;
+  remote: boolean;
+  requested_at: string;
 }
 
 export interface Ruleset {
@@ -57,6 +94,10 @@ export interface Room {
   members: RoomMember[];
   created_at: string;
   last_activity_at: string | null;
+  /** Quem entra pelo PIN espera o Mestre aceitar. */
+  require_approval?: boolean;
+  /** Pedidos esperando (só para o Mestre). */
+  pending_requests?: number;
 }
 
 export interface Scene {

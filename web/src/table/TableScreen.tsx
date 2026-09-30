@@ -21,6 +21,7 @@ import type { Room } from "../api/types";
 import { useRouter } from "../router";
 import { ConnectDialog } from "./ConnectDialog";
 import { DetailPanel } from "./DetailPanel";
+import { JoinRequests } from "./JoinRequests";
 import { LogPanel } from "./LogPanel";
 import { MapCanvas } from "./MapCanvas";
 import { Roster } from "./Roster";
@@ -122,6 +123,8 @@ function Board({ room }: { room: Room }) {
         </Toolbar>
       </AppBar>
 
+      <JoinRequests roomId={room.id} />
+
       {status === "closed" && statusMessage && (
         <Box sx={{ bgcolor: "error.dark", px: 2, py: 0.5 }}>
           <Typography variant="body2">{statusMessage}</Typography>
@@ -159,7 +162,7 @@ function Board({ room }: { room: Room }) {
           </Box>
         </Box>
       )}
-      <ConnectDialog open={connectOpen} pin={room.pin} onClose={() => setConnectOpen(false)} />
+      <ConnectDialog open={connectOpen} room={room} onClose={() => setConnectOpen(false)} />
     </Box>
   );
 }

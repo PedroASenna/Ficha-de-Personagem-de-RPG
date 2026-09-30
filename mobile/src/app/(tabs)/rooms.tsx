@@ -5,7 +5,8 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Card, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { Screen } from '../../components/common/Screen';
-import { api, ApiError } from '../../lib/api';
+import { ApiError } from '../../lib/api';
+import { joinByPin, openJoined } from '../../lib/joining';
 import { keys, useRooms } from '../../lib/queries';
 
 const PIN_CHARS = /[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g;
@@ -23,9 +24,9 @@ export default function RoomsScreen() {
     setBusy(true);
     setError(null);
     try {
-      const room = await api.joinRoom(pin);
+      const outcome = await joinByPin(pin);
       await queryClient.invalidateQueries({ queryKey: keys.rooms });
-      router.push({ pathname: '/room/[pin]', params: { pin: room.pin } });
+      openJoined(outcome, pin);
       setPin('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível entrar.');

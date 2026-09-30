@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Discovery } from "../api/types";
-import { joinLink, serverCandidates } from "./connect";
+import { inviteText, joinLink, serverCandidates } from "./connect";
 
 const discovery = { port: 8080, addresses: ["192.168.0.20", "10.0.0.5"] } as Discovery;
 
@@ -25,5 +25,15 @@ describe("conectar celulares", () => {
     expect(joinLink("http://192.168.0.20:8080", "ABC123")).toBe(
       "rpgplay://join?server=http%3A%2F%2F192.168.0.20%3A8080&pin=ABC123",
     );
+  });
+
+  it("pela internet, o link leva o código de acesso", () => {
+    expect(joinLink("https://mesa-abc.trycloudflare.com", "ABC123", "ABCD-EFGH")).toBe(
+      "rpgplay://join?server=https%3A%2F%2Fmesa-abc.trycloudflare.com&pin=ABC123&code=ABCD-EFGH",
+    );
+    const text = inviteText("https://mesa-abc.trycloudflare.com", "ABC123", "ABCD-EFGH");
+    expect(text).toContain("https://mesa-abc.trycloudflare.com/entrar?pin=ABC123&code=ABCD-EFGH");
+    expect(text).toContain("ABCD-EFGH");
+    expect(text).toContain("PIN ABC123");
   });
 });

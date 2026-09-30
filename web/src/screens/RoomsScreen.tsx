@@ -4,6 +4,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import KeyIcon from "@mui/icons-material/Key";
 import PlayIcon from "@mui/icons-material/PlayArrow";
+import PublicIcon from "@mui/icons-material/Public";
 import ReplayIcon from "@mui/icons-material/Replay";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
@@ -22,12 +23,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api } from "../api/client";
-import type { Discovery, Room } from "../api/types";
+import type { Discovery, RemoteView, Room } from "../api/types";
 import { useSession } from "../auth/session";
 import { useRouter } from "../router";
 import { toast } from "../toasts";
 import { AccountsDialog, PasswordDialog } from "./AccountDialogs";
 import { NewRoomDialog } from "./NewRoomDialog";
+import { RemoteDialog } from "./RemoteDialog";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "";
@@ -69,6 +71,14 @@ function RoomCard({ room }: { room: Room }) {
         <Typography variant="body2" color="text.secondary">
           {room.ruleset_name}
         </Typography>
+        {!archived && (room.pending_requests ?? 0) > 0 && (
+          <Chip
+            size="small"
+            color="warning"
+            sx={{ my: 0.5 }}
+            label={room.pending_requests === 1 ? "1 pedido de entrada" : `${room.pending_requests} pedidos de entrada`}
+          />
+        )}
         <Typography variant="body2" color="text.secondary">
           {players.length === 0
             ? "Nenhum jogador ainda"
@@ -109,12 +119,18 @@ function RoomCard({ room }: { room: Room }) {
 
 export function RoomsScreen() {
   const user = useSession((s) => s.user);
-  const [dialog, setDialog] = useState<"new" | "password" | "accounts" | null>(null);
+  const [dialog, setDialog] = useState<"new" | "password" | "accounts" | "internet" | null>(null);
   const rooms = useQuery({
     queryKey: ["rooms"],
     queryFn: () => api<Room[]>("/rooms?include_archived=true"),
   });
   const server = useQuery({ queryKey: ["discovery"], queryFn: () => api<Discovery>("/discovery", { auth: false }) });
+  const remote = useQuery({
+    queryKey: ["remote"],
+    queryFn: () => api<RemoteView>("/remote"),
+    enabled: Boolean(user?.is_admin),
+  });
+  const internetOn = remote.data && remote.data.mode !== "off";
 
   const mine = (rooms.data ?? []).filter((r) => r.my_role === "master");
   const open = mine.filter((r) => r.status === "open");
@@ -147,6 +163,17 @@ export function RoomsScreen() {
               <KeyIcon />
             </IconButton>
           </Tooltip>
+          {user?.is_admin && (
+            <Tooltip title={internetOn ? "Jogar pela internet (ligado)" : "Jogar pela internet"}>
+              <IconButton
+                aria-label="Internet"
+                color={internetOn ? "primary" : "default"}
+                onClick={() => setDialog("internet")}
+              >
+                <PublicIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           {user?.is_admin && (
             <Tooltip title="Contas do servidor">
               <IconButton aria-label="Contas" onClick={() => setDialog("accounts")}>
@@ -208,6 +235,7 @@ export function RoomsScreen() {
       <NewRoomDialog open={dialog === "new"} onClose={() => setDialog(null)} />
       <PasswordDialog open={dialog === "password"} onClose={() => setDialog(null)} />
       {user?.is_admin && <AccountsDialog open={dialog === "accounts"} onClose={() => setDialog(null)} />}
+      {user?.is_admin && <RemoteDialog open={dialog === "internet"} onClose={() => setDialog(null)} />}
     </Box>
   );
 }

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml/badge.svg)](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/actions/workflows/ci.yml)
 
-RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Windows ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos.
+RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Windows ou Raspberry Pi), o Mestre comanda uma **mesa virtual** no PC e os jogadores usam o **app no celular**. Tudo se acha pelo Wi-Fi, sem nuvem e sem loja de aplicativos. Quem está longe entra **pela internet, de graça**, por um link https que o próprio servidor abre.
 
 - **Personagem jogável em um toque** (ou num wizard guiado com autosave), **dados animados com física e emoção** (rachadura e tremor na falha crítica, explosão dourada e confete no crítico) e **HUD de combate** com barra de PV que sangra e brilha.
 - **Mesa virtual do Mestre:** mapas importados em **cenas** (troca quando o grupo se separa), **várias imagens de cenário na mesma cena** (mover, girar e redimensionar, uma ou várias de uma vez), **objetos que carregam** bonecos (carroça, barco, jaula), bonecos com a imagem dos personagens e **inimigos criados na hora**. Clicar num boneco mostra **os atributos em tempo real**, com dano, cura, rolagens secretas e **subir de nível**.
@@ -13,6 +13,7 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Wi
 - **Testes da ficha com um toque:** no celular e no painel, a perícia já rola do jeito certo para o sistema (o NH ou o dado vem pronto do servidor).
 - **Ângulo ajustável** em toda imagem enviada.
 - **Contas locais** (usuário e senha no servidor) e **campanhas salvas**: arquivar e reabrir de onde parou.
+- **Jogar pela internet de graça**, sem abrir portas no roteador (Cloudflare Quick Tunnel ou Tailscale Funnel), com **código de acesso** para criar conta e **sala de espera**: o Mestre aceita ou recusa quem entra na mesa.
 
 | Peça | Instalador | Tecnologia |
 |---|---|---|
@@ -28,7 +29,7 @@ RPG de mesa **na rede de casa**. Um servidor fica ligado num canto (PC Linux, Wi
 | Assunto | Onde |
 |---|---|
 | Instalação passo a passo (servidor, PC do Mestre, APK), primeira sessão, backup, problemas comuns, gerar instaladores | [docs/INSTALACAO.md](docs/INSTALACAO.md) |
-| Descoberta na rede, portas, modelo de segurança, onde ficam os dados | [docs/REDE_LOCAL.md](docs/REDE_LOCAL.md) |
+| Descoberta na rede, portas, acesso pela internet, modelo de segurança, onde ficam os dados | [docs/REDE_LOCAL.md](docs/REDE_LOCAL.md) |
 | Arquitetura, pastas, modelo de dados, protocolo WebSocket | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Fluxos de UX (app, painel do Mestre, mapa do jogador) | [docs/UX_FLOWS.md](docs/UX_FLOWS.md) |
 | Sistemas de regras (o Mestre escolhe ao criar a mesa) | [docs/RULESETS.md](docs/RULESETS.md) |
@@ -90,22 +91,23 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
 
 ## Verificação feita
 
-- **Servidor:** 169 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
+- **Servidor:** 192 testes pytest em SQLite **e** PostgreSQL 16, entre eles:
   - contas locais e admin;
   - descoberta HTTP e UDP;
   - campanhas arquivadas e reabertas;
   - permissões da mesa;
   - WebSocket com três conexões (o `token.move` só chega a quem está na cena, a separação do grupo gera `view.reset`, o dano em inimigo manda números só ao Mestre);
   - backup e restauração, inclusive recusando tar malicioso;
+  - 0.5: jogar pela internet com um `cloudflared` e um `tailscale` de mentira (o link sai da saída do programa, volta sozinho quando o servidor reabre, o link fixo confere o `server_id`), download do `cloudflared` (e a falha explicada), porta de internet ocupada sem derrubar o jogo em casa, cadastro de fora só com o código (e nunca a primeira conta), limites por IP e por conta, aprovação de entrada com WebSocket para o Mestre, recusa por 10 minutos, sala cheia e a sala de espera sem revelar PINs, página de convite `/entrar` e o comando `rpgplay-server internet`;
   - 0.4: GURPS (custos de atributos, secundárias, vantagens com nível/opções/autocontrole, perícias 1-2-4-8, Aptidão Mágica nas mágicas, limite de desvantagens e peculiaridades, pontos novos só gastam o que têm) e Savage Worlds (raças, orçamento da criação pago por Complicações, Aparar/Resistência/Carisma pelos efeitos, requisitos, Progressos com as regras de Estágio); dados que explodem, Dado Selvagem, olhos de cobra, tabela de críticos do GURPS e rolagem pela mesa com o teste no log;
   - 0.3: várias peças de cenário com rotação (e o arquivo só apagado quando a última peça sai), objetos levando e girando os ocupantes e escondendo quem está dentro, névoa só com a exploração de cada jogador (caminho explorado, reset, grade nova descarta), rotação em todo envio de imagem, mapa-múndi revelado aos poucos sem notas secretas, subir de nível (5ª edição e genérico) e raça/origem digitadas com pontos.
 
-  `ruff` e `black` limpos. As migrações 0002, 0003 e 0004 passam por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados.
+  `ruff` e `black` limpos. As migrações 0002 a 0005 passam por `upgrade → check → downgrade → upgrade` nos dois bancos, com dados antigos migrados.
 - **Pacote `.deb` do servidor:** gerado aqui com Python portátil (exige glibc ≥ 2.28) e instalado com `dpkg`, rodando como o usuário `rpgplay`. Funcionaram:
   - `/health`, `/mestre`, descoberta por **broadcast UDP** e smoke test;
   - `reset-password`, `backup` e `restore` pelo comando `rpgplay-server`;
   - atualização mantendo o `server.env`, `remove` mantendo as campanhas e `purge` apagando tudo.
-- **Painel do Mestre:** 48 testes Vitest. Dois testes Playwright abrem mesas de GURPS e de Savage Worlds: o Mestre rola a perícia pela ficha (NH 17 no GURPS; dado + Dado Selvagem no Savage) e dá pontos/XP, conferindo o que chega à jogadora. Outro teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
+- **Painel do Mestre:** 50 testes Vitest. Um teste Playwright liga a internet pelo painel (com um `cloudflared` de mentira), confere o link, o código e o convite, e recebe dois jogadores pela porta de internet: um criado com o código e aceito pela faixa "quer entrar na mesa", outro recusado. Dois testes Playwright abrem mesas de GURPS e de Savage Worlds: o Mestre rola a perícia pela ficha (NH 17 no GURPS; dado + Dado Selvagem no Savage) e dá pontos/XP, conferindo o que chega à jogadora. Outro teste Playwright ponta a ponta faz o fluxo completo contra o servidor de desenvolvimento **e** contra o executável do `.deb` 0.3.0, com uma jogadora conectada pelo WebSocket conferindo o que chega do outro lado:
   - criar conta e mesa;
   - enviar um mapa;
   - receber a jogadora ao vivo;
@@ -133,12 +135,13 @@ O app usa módulos nativos (Reanimated, SVG, câmera, haptics, áudio), então *
   - aceita o IP digitado.
 
   O `.exe` (NSIS) foi gerado aqui com wine, com ícone e metadados conferidos.
-- **App:** 119 testes Jest (ficha de GURPS e Savage, dados que explodem, texto dos testes, descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
+- **App:** 124 testes Jest (link com código de acesso, sala de espera, ficha de GURPS e Savage, dados que explodem, texto dos testes, descoberta e QR, reducer e geometria do mapa, renderização da cena com peças giradas, objetos e névoa, aba Mundo, regras de subir de nível, mais os de antes); `tsc` e `eslint` limpos. `expo export` gera o bundle Android. No `expo prebuild`, o manifest gerado tem `usesCleartextTraffic`, as permissões de rede e câmera e o esquema `rpgplay://`.
 - **Não verificado aqui:**
   - o **APK** não foi compilado (este ambiente não tem acesso ao Android SDK); o workflow de Release compila;
   - o `.exe` do **programa do Mestre** não rodou num Windows de verdade (o do servidor roda no CI);
   - a descoberta não foi testada num **Wi-Fi real** com celulares;
-  - a imagem Docker não foi gerada (Docker Hub bloqueado aqui).
+  - a imagem Docker não foi gerada (Docker Hub bloqueado aqui);
+  - os **túneis de verdade** (Cloudflare e Tailscale) não rodaram aqui (este ambiente não alcança a Cloudflare nem o GitHub para baixar o `cloudflared`): os testes usam programas de mentira que imitam a saída dos verdadeiros.
 
 ## Próximos passos sugeridos
 

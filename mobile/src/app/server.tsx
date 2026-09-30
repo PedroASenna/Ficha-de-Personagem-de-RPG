@@ -7,7 +7,7 @@ import { Button, Card, HelperText, List, ProgressBar, Text, TextInput, useTheme 
 
 import { Screen } from '../components/common/Screen';
 import { chooseServer } from '../lib/connect';
-import { normalizeServerUrl, probe, scanSubnet, type ServerInfo, unreachableHelp } from '../lib/discovery';
+import { normalizeServerUrl, probe, probeTimeout, scanSubnet, type ServerInfo, unreachableHelp } from '../lib/discovery';
 
 export default function ServerScreen() {
   const theme = useTheme();
@@ -80,7 +80,7 @@ export default function ServerScreen() {
       return;
     }
     setBusy(true);
-    const server = await probe(url, 3000);
+    const server = await probe(url, probeTimeout(url));
     setBusy(false);
     if (server) await pick(server);
     else setError(unreachableHelp(url));

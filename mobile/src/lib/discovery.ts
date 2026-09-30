@@ -14,6 +14,8 @@ export type ServerInfo = {
   version: string;
   serverId: string;
   registrationOpen: boolean;
+  /** Conectado pela internet: criar conta pede o código de acesso que o Mestre passa. */
+  accessCodeRequired?: boolean;
 };
 
 type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
@@ -24,6 +26,7 @@ type DiscoveryPayload = {
   version?: unknown;
   server_id?: unknown;
   registration_open?: unknown;
+  access_code_required?: unknown;
 };
 
 /** "192.168.0.20", "192.168.0.20:9000", "http://casa.local:8080/mestre" → http://host:porta */
@@ -60,7 +63,13 @@ export function toServerInfo(payload: DiscoveryPayload, origin: string): ServerI
     version: typeof payload.version === 'string' ? payload.version : '?',
     serverId: typeof payload.server_id === 'string' ? payload.server_id : origin,
     registrationOpen: payload.registration_open !== false,
+    accessCodeRequired: payload.access_code_required === true,
   };
+}
+
+/** Pela internet (https) a resposta demora mais que na rede de casa. */
+export function probeTimeout(origin: string): number {
+  return origin.startsWith('https://') ? 10_000 : 3000;
 }
 
 export async function probe(origin: string, timeoutMs = 800, fetchImpl: FetchLike = fetch): Promise<ServerInfo | null> {
@@ -115,6 +124,12 @@ export async function scanSubnet(ip: string, options: ScanOptions = {}): Promise
  * servidor (ufw no Debian/Ubuntu), que o comando `rpgplay-server diagnostico` aponta e resolve.
  */
 export function unreachableHelp(server: string): string {
+  if (server.startsWith('https://')) {
+    return (
+      `O servidor ${server} não respondeu. Confira a internet do celular e peça ao Mestre o link atual ` +
+      '(o link rápido muda quando o servidor reinicia).'
+    );
+  }
   return (
     `O servidor ${server} não respondeu. Teste abrindo ${server}/api/v1/discovery no navegador do celular. ` +
     'Se não abrir: confira se o celular está no mesmo Wi-Fi (sem VPN) e, no computador do servidor, rode ' +
@@ -122,8 +137,17 @@ export function unreachableHelp(server: string): string {
   );
 }
 
-/** Link do QR code do painel do Mestre: rpgplay://join?server=http%3A%2F%2F192.168.0.20%3A8080&pin=ABC123 */
-export function parseJoinLink(link: string): { server: string; pin: string | null } | null {
+/** Código de acesso como o Mestre passou (ABCD-EFGH), aceitando minúsculas e sem o traço. */
+export function normalizeAccessCode(value: string | null | undefined): string | null {
+  const raw = (value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return raw.length === 8 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : null;
+}
+
+/**
+ * Link do QR code do painel do Mestre: rpgplay://join?server=http%3A%2F%2F192.168.0.20%3A8080&pin=ABC123
+ * (pela internet vem também &code=ABCD-EFGH, o código de acesso para criar conta).
+ */
+export function parseJoinLink(link: string): { server: string; pin: string | null; code: string | null } | null {
   const match = /^rpgplay:\/\/join\/?\?(.*)$/i.exec(link.trim());
   if (!match) return null;
   const params: Record<string, string> = {};
@@ -138,5 +162,5 @@ export function parseJoinLink(link: string): { server: string; pin: string | nul
   const server = params.server ? normalizeServerUrl(params.server) : null;
   if (!server) return null;
   const pin = params.pin && /^[A-Z0-9]{6}$/i.test(params.pin) ? params.pin.toUpperCase() : null;
-  return { server, pin };
+  return { server, pin, code: normalizeAccessCode(params.code) };
 }

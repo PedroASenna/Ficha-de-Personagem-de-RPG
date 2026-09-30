@@ -17,13 +17,13 @@ flowchart LR
 
 | Peça | Arquivo | Quem usa |
 |---|---|---|
-| Servidor | `rpgplay-server_0.4.0_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.4.0.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
-| Programa do Mestre | `RPG-Play-Mestre-Setup-0.4.0.exe` (Windows) ou `rpgplay-mestre_0.4.0_amd64.deb` (Linux) | O Mestre, no PC |
-| App dos jogadores | `RPG-Play-0.4.0.apk` | Cada jogador, no celular Android |
+| Servidor | `rpgplay-server_0.5.0_amd64.deb` (PC Linux), `_arm64.deb` (Raspberry Pi 64 bits) ou `RPG-Play-Servidor-Setup-0.5.0.exe` (Windows) | Fica ligado durante as sessões (pode ser o próprio PC do Mestre) |
+| Programa do Mestre | `RPG-Play-Mestre-Setup-0.5.0.exe` (Windows) ou `rpgplay-mestre_0.5.0_amd64.deb` (Linux) | O Mestre, no PC |
+| App dos jogadores | `RPG-Play-0.5.0.apk` | Cada jogador, no celular Android |
 
 Baixe todos na página **[Releases](https://github.com/PedroASenna/Ficha-de-Personagem-de-RPG/releases/latest)** do projeto.
 
-Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador).
+Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador). Quem está longe também pode jogar: o servidor abre um link **https pela internet, de graça**, sem mexer no roteador (seção 5).
 
 ## 1. Servidor
 
@@ -36,7 +36,7 @@ Todos precisam estar **na mesma rede** (o mesmo Wi-Fi ou o mesmo roteador).
 ### Instalar
 
 ```bash
-sudo apt install ./rpgplay-server_0.4.0_amd64.deb
+sudo apt install ./rpgplay-server_0.5.0_amd64.deb
 ```
 
 No fim, o instalador mostra os endereços, por exemplo:
@@ -167,7 +167,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 
 ### Windows
 
-1. Rode `RPG-Play-Mestre-Setup-0.4.0.exe`.
+1. Rode `RPG-Play-Mestre-Setup-0.5.0.exe`.
 2. O Windows pode avisar "O Windows protegeu o computador" (o instalador não tem certificado pago de assinatura). Clique em **Mais informações → Executar assim mesmo**.
 3. Escolha a pasta e conclua. O atalho "RPG Play Mestre" aparece no menu Iniciar e na área de trabalho.
 4. Se o Firewall do Windows perguntar, permita o acesso em **redes privadas** (é assim que ele acha o servidor).
@@ -175,7 +175,7 @@ O compose usa `network_mode: host` para a descoberta automática (UDP) funcionar
 ### Linux
 
 ```bash
-sudo apt install ./rpgplay-mestre_0.4.0_amd64.deb
+sudo apt install ./rpgplay-mestre_0.5.0_amd64.deb
 ```
 
 O "RPG Play Mestre" aparece no menu de aplicativos.
@@ -190,7 +190,7 @@ Ao abrir, o programa procura o servidor na rede e já entra no painel do Mestre.
 
 ### Instalar o APK
 
-1. Passe o arquivo `RPG-Play-0.4.0.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
+1. Passe o arquivo `RPG-Play-0.5.0.apk` para o celular (WhatsApp, cabo USB, Google Drive, pendrive...).
 2. Toque no arquivo. O Android pede para **permitir a instalação de apps desta fonte**: autorize para o app que você usou para abrir o arquivo (Arquivos, Chrome, WhatsApp...).
 3. Se o **Play Protect** avisar que o app é desconhecido, toque em **Mais detalhes → Instalar mesmo assim**. Isso aparece porque o app não veio da Play Store.
 
@@ -216,11 +216,72 @@ Depois, cada jogador cria a própria conta (usuário e senha), cria o personagem
 8. **O grupo se separou?** Crie outra cena ("Caverna") e mova quem foi para lá (botão direito no boneco → **Mover para a cena**). Cada jogador passa a ver só o mapa de onde está.
 9. **Fim da sessão:** tudo fica salvo. Na lista de mesas, **Arquivar** guarda a campanha, e **Reabrir campanha** volta de onde parou.
 
-## 5. Dia a dia do servidor
+## 5. Jogar pela internet (de graça)
+
+Quem está em outra casa joga pelo celular, com o servidor ligado na sua. Não precisa abrir portas no roteador e funciona até em internet com CGNAT (a maioria das operadoras de celular e fibra).
+
+```mermaid
+flowchart LR
+  subgraph Casa["Sua casa"]
+    S["Servidor RPG Play<br/>(Linux ou Windows)"]
+  end
+  T["Túnel grátis<br/>Cloudflare ou Tailscale<br/>https://…"]
+  L1["Jogador em outra casa<br/>app RPG Play"]
+  L2["Jogador no 4G"]
+  S -- "conexão de saída" --> T
+  L1 -- "https" --> T
+  L2 -- "https" --> T
+```
+
+**Ligar (uma vez, pelo painel do Mestre):**
+
+1. Entre no painel com a conta de administrador (a primeira criada no servidor).
+2. Na lista de mesas, clique no **globo** (Internet) e escolha **Link rápido (Cloudflare)**.
+3. Espere a situação ficar **No ar**. Na primeira vez o servidor baixa o programa da Cloudflare (uns 40 MB).
+4. Pronto: aparecem o **link** (`https://…trycloudflare.com`) e o **código de acesso** (ex.: `K7QD-M2XP`).
+
+**Convidar quem está longe:**
+
+1. Abra a mesa e clique em **Conectar celulares → Pela internet**.
+2. Clique em **Copiar convite** e mande no grupo (WhatsApp, Discord...). O convite traz um link `https://…/entrar?pin=…&code=…`. No celular, o botão **Abrir no app RPG Play** configura o servidor, preenche o código e já pede para entrar na mesa.
+3. O jogador cria a conta (o código de acesso já vem preenchido), escolhe o personagem e fica na **sala de espera**.
+4. Na mesa aparece uma faixa "Fulano quer entrar na mesa pela internet": **Aceitar** ou **Recusar**.
+
+**As duas opções de link:**
+
+| | Link rápido (Cloudflare) | Link fixo (Tailscale) |
+|---|---|---|
+| Conta | Nenhuma | Conta grátis no Tailscale (Google, Microsoft, GitHub...) |
+| O link | Muda sempre que o servidor ou o PC reinicia (o novo aparece no painel) | Nunca muda (`https://nome-do-pc.algo.ts.net`) |
+| Preparar | Nada | Uma vez: instalar o Tailscale e rodar um comando (abaixo) |
+| Limites | Serviço de teste da Cloudflare, sem garantia; até 200 requisições ao mesmo tempo (sobra para uma mesa) | Uso pessoal grátis do Tailscale |
+
+**Link fixo, passo a passo (uma vez):**
+
+1. Instale o Tailscale no computador do servidor: [tailscale.com/download](https://tailscale.com/download). No Linux: `curl -fsSL https://tailscale.com/install.sh | sh`.
+2. **Linux:** `sudo rpgplay-server internet fixo`. **Windows:** menu Iniciar → RPG Play Servidor → **Link fixo pela internet (Tailscale)**.
+3. Na primeira vez o Tailscale mostra um link para entrar na conta e outro para ativar o **Funnel**: abra os dois no navegador e confirme.
+4. No painel, no globo (Internet), escolha **Link fixo (Tailscale)**. Se ainda aparecer problema, clique em **Conferir de novo**.
+
+Para desligar o link fixo: `sudo rpgplay-server internet desligar-fixo` (Linux) ou escolha **Desligado** no painel.
+
+**Segurança (o que muda com a internet ligada):**
+
+- Quem vem pela internet só **cria conta com o código de acesso**. Troque o código no painel se ele vazar (quem já tem conta continua entrando).
+- A primeira conta do servidor (a do administrador) só pode ser criada na rede de casa.
+- As mesas abertas passam a **pedir aprovação** para quem entra pelo PIN (**Aprovar entrada**, em Conectar celulares). O Mestre pode desligar isso em cada mesa.
+- Tudo pela internet vai criptografado (https). Os IPs da sua casa não aparecem para quem está fora.
+- Limites contra força bruta: cadastro por IP e login por conta.
+- Desligou no painel, acabou: o túnel fecha e o cadastro pela internet para de funcionar.
+
+**Ver o link e o código no terminal:** `sudo rpgplay-server internet` (Linux) ou menu Iniciar → **Jogar pela internet (link e código)** (Windows).
+
+## 6. Dia a dia do servidor
 
 | Tarefa | Comando |
 |---|---|
 | O celular não conecta | `sudo rpgplay-server diagnostico` mostra o que está errado; `sudo rpgplay-server liberar-firewall` resolve o caso mais comum (firewall) |
+| Ver o link e o código de acesso da internet | `sudo rpgplay-server internet` |
 | Alguém esqueceu a senha | `sudo rpgplay-server reset-password <usuário>` (gera uma senha nova) ou pelo painel do admin |
 | Tornar alguém administrador | `sudo rpgplay-server make-admin <usuário>` |
 | Backup (banco + mapas + retratos) | `sudo rpgplay-server backup ~/rpgplay-backup.tar.gz` |
@@ -232,7 +293,7 @@ Depois, cada jogador cria a própria conta (usuário e senha), cria o personagem
 
 Dica: guarde o backup fora do servidor (pendrive ou outro PC) de vez em quando.
 
-## 6. Problemas comuns
+## 7. Problemas comuns
 
 | Sintoma | O que fazer |
 |---|---|
@@ -245,9 +306,13 @@ Dica: guarde o backup fora do servidor (pendrive ou outro PC) de vez em quando.
 | O jogador não vê o mapa | O Mestre ainda não colocou o personagem dele numa cena (aba Grupo → arrastar para o mapa) |
 | O jogador vê um inimigo sumir | O Mestre escondeu o boneco ou o levou para outra cena |
 | "Cadastro fechado" | `RPG_ALLOW_REGISTRATION=true` no `server.env` e reinicie o serviço |
+| Internet: "Com problema" no link rápido | Confira a internet do servidor. O servidor tenta de novo sozinho (e o link muda). Se o download do programa da Cloudflare falhar, veja se o antivírus ou um proxy bloqueiam o GitHub |
+| Internet: o jogador diz que o link não abre | O link rápido muda quando o servidor reinicia: mande o convite de novo (Conectar celulares → Pela internet). Para um link que não muda, use o link fixo (seção 5) |
+| "Código de acesso incorreto" | Confira o código no painel (globo). Maiúsculas/minúsculas e o traço não importam |
+| "A porta 8081 (usada para jogar pela internet) está ocupada" | Outro programa usa a porta. Mude `RPG_INTERNET_PORT` no `server.env` (Linux) ou `servidor.env` (Windows); o jogo em casa continua funcionando |
 | O painel mostra "Painel do Mestre não foi instalado" | Servidor rodando a partir do código-fonte sem o painel compilado: `cd web && npm ci && npm run build` |
 
-## 7. Gerar os instaladores
+## 8. Gerar os instaladores
 
 Para quem mexe no código. Cada parte tem teste automatizado; veja o `README.md`.
 

@@ -1,24 +1,35 @@
-"""Mesas (campanhas) do Mestre: criação com sistema de regras, entrada por PIN, log, arquivar/reabrir."""
+"""Mesas (campanhas) do Mestre: criação com sistema de regras, entrada por PIN (com aprovação do Mestre,
+quando a mesa pede), log, arquivar/reabrir."""
 
+import contextlib
 import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ConflictError, DomainError, ForbiddenError, NotFoundError
-from app.models import Character, Room, RoomMember, SessionEvent, User
-from app.models.enums import CharacterStatus, RoomRole, RoomStatus, SessionEventType, Visibility
+from app.core.errors import ConflictError, DomainError, ForbiddenError, JoinDeniedError, NotFoundError
+from app.models import Character, Room, RoomJoinRequest, RoomMember, SessionEvent, User
+from app.models.enums import (
+    CharacterStatus,
+    JoinRequestStatus,
+    RoomRole,
+    RoomStatus,
+    SessionEventType,
+    Visibility,
+)
 from app.rulesets.loader import RulesetRegistry
-from app.schemas.rooms import MemberCharacterOut, RoomMemberOut, RoomOut
+from app.schemas.rooms import JoinRequestOut, MemberCharacterOut, RoomMemberOut, RoomOut
 from app.services.media import MediaStore
 
 # Sem 0/O, 1/I: o PIN é ditado em voz alta na mesa.
 PIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PIN_LENGTH = 6
+# Recusado pelo Mestre: o jogador só pode pedir de novo depois disso.
+DENIED_FOR = timedelta(minutes=10)
 
 
 def new_pin() -> str:
@@ -26,7 +37,14 @@ def new_pin() -> str:
 
 
 async def create_room(
-    session: AsyncSession, master: User, name: str, ruleset_id: str, max_players: int, registry: RulesetRegistry
+    session: AsyncSession,
+    master: User,
+    name: str,
+    ruleset_id: str,
+    max_players: int,
+    registry: RulesetRegistry,
+    *,
+    require_approval: bool = False,
 ) -> Room:
     pack = registry.get(ruleset_id)
     if pack is None or pack.status != "available":
@@ -39,6 +57,7 @@ async def create_room(
             ruleset_id=ruleset_id,
             max_players=max_players,
             status=RoomStatus.OPEN,
+            require_approval=require_approval,
         )
         session.add(room)
         try:
@@ -81,7 +100,43 @@ async def _validate_character(session: AsyncSession, room: Room, user: User, cha
     return character
 
 
-async def join_room(session: AsyncSession, user: User, pin: str, character_id: uuid.UUID | None) -> Room:
+def _aware(value: datetime) -> datetime:
+    # O SQLite devolve datas sem fuso (gravadas em UTC).
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+async def _require_seat(session: AsyncSession, room: Room) -> None:
+    players = await session.scalar(
+        select(func.count())
+        .select_from(RoomMember)
+        .where(RoomMember.room_id == room.id, RoomMember.role == RoomRole.PLAYER, RoomMember.kicked_at.is_(None))
+    )
+    if players >= room.max_players:
+        raise ConflictError("A sala está cheia.")
+
+
+async def _add_player(
+    session: AsyncSession, room: Room, user: User, character: Character | None, member: RoomMember | None = None
+) -> RoomMember:
+    if member is None:
+        member = RoomMember(room_id=room.id, user_id=user.id, role=RoomRole.PLAYER)
+        session.add(member)
+    member.kicked_at = None
+    await record_event(
+        session,
+        room.id,
+        user.id,
+        SessionEventType.JOIN,
+        {"summary": f"{user.display_name} entrou na mesa."},
+        character_id=character.id if character else None,
+    )
+    return member
+
+
+async def join_room(
+    session: AsyncSession, user: User, pin: str, character_id: uuid.UUID | None, *, remote: bool = False
+) -> Room | RoomJoinRequest:
+    """Entra pelo PIN. Numa mesa com "Aprovar entrada", devolve o pedido pendente em vez da mesa."""
     room = await get_open_room_by_pin(session, pin)
     member = await get_member(session, room.id, user.id)
     if member and member.kicked_at is not None:
@@ -89,27 +144,128 @@ async def join_room(session: AsyncSession, user: User, pin: str, character_id: u
     character = await _validate_character(session, room, user, character_id) if character_id else None
 
     if member is None:
-        players = await session.scalar(
-            select(func.count())
-            .select_from(RoomMember)
-            .where(RoomMember.room_id == room.id, RoomMember.role == RoomRole.PLAYER, RoomMember.kicked_at.is_(None))
-        )
-        if players >= room.max_players:
-            raise ConflictError("A sala está cheia.")
-        member = RoomMember(room_id=room.id, user_id=user.id, role=RoomRole.PLAYER)
-        session.add(member)
-        await record_event(
-            session,
-            room.id,
-            user.id,
-            SessionEventType.JOIN,
-            {"summary": f"{user.display_name} entrou na mesa."},
-            character_id=character.id if character else None,
-        )
+        await _require_seat(session, room)
+        if room.require_approval:
+            return await _request_join(session, room, user, character, remote)
+        member = await _add_player(session, room, user, character)
     if character:
         member.character_id = character.id
     await session.commit()
     return room
+
+
+async def _request_join(
+    session: AsyncSession, room: Room, user: User, character: Character | None, remote: bool
+) -> RoomJoinRequest:
+    request = await session.get(RoomJoinRequest, (room.id, user.id))
+    now = datetime.now(UTC)
+    if request is not None and request.status == JoinRequestStatus.DENIED:
+        if _aware(request.updated_at) > now - DENIED_FOR:
+            raise JoinDeniedError("O Mestre não aceitou sua entrada nesta mesa. Fale com ele antes de tentar de novo.")
+    if request is None:
+        request = RoomJoinRequest(room_id=room.id, user_id=user.id)
+        session.add(request)
+    request.status = JoinRequestStatus.PENDING
+    request.remote = remote
+    request.updated_at = now
+    if character is not None:
+        request.character_id = character.id
+    await session.commit()
+    return request
+
+
+async def join_status(session: AsyncSession, user: User, pin: str) -> tuple[str, Room]:
+    """Sala de espera: o app pergunta se o Mestre já decidiu. Quem nunca pediu vê o mesmo "não encontrada"
+    de um PIN errado (sem revelar que a mesa existe)."""
+    room = await get_open_room_by_pin(session, pin)
+    member = await get_member(session, room.id, user.id)
+    if member is not None:
+        return ("approved" if member.kicked_at is None else "denied"), room
+    request = await session.get(RoomJoinRequest, (room.id, user.id))
+    if request is None:
+        raise NotFoundError("Sala não encontrada. Confira o PIN.")
+    if request.status == JoinRequestStatus.PENDING:
+        return "pending", room
+    if _aware(request.updated_at) > datetime.now(UTC) - DENIED_FOR:
+        return "denied", room
+    raise NotFoundError("Sala não encontrada. Confira o PIN.")
+
+
+def _require_master(room: Room, user: User) -> None:
+    if room.master_id != user.id:
+        raise ForbiddenError("Só o Mestre da mesa pode fazer isso.")
+
+
+async def list_requests(session: AsyncSession, room: Room, master: User) -> list[JoinRequestOut]:
+    _require_master(room, master)
+    return await pending_requests(session, room)
+
+
+async def pending_requests(session: AsyncSession, room: Room) -> list[JoinRequestOut]:
+    rows = (
+        await session.execute(
+            select(RoomJoinRequest, User, Character)
+            .join(User, User.id == RoomJoinRequest.user_id)
+            .outerjoin(Character, Character.id == RoomJoinRequest.character_id)
+            .where(RoomJoinRequest.room_id == room.id, RoomJoinRequest.status == JoinRequestStatus.PENDING)
+            .order_by(RoomJoinRequest.updated_at)
+        )
+    ).all()
+    return [
+        JoinRequestOut(
+            user_id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            character_name=character.name if character else None,
+            remote=request.remote,
+            requested_at=request.updated_at,
+        )
+        for request, user, character in rows
+    ]
+
+
+async def _pending(session: AsyncSession, room: Room, user_id: uuid.UUID) -> RoomJoinRequest:
+    request = await session.get(RoomJoinRequest, (room.id, user_id))
+    if request is None or request.status != JoinRequestStatus.PENDING:
+        raise NotFoundError("Esse pedido de entrada não existe mais.")
+    return request
+
+
+async def approve_request(session: AsyncSession, room: Room, master: User, user_id: uuid.UUID) -> None:
+    _require_master(room, master)
+    request = await _pending(session, room, user_id)
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        await session.delete(request)
+        await session.commit()
+        raise NotFoundError("Essa conta não existe mais.")
+    member = await get_member(session, room.id, user_id)
+    if member is None or member.kicked_at is not None:
+        await _require_seat(session, room)
+        character = None
+        if request.character_id:
+            # O personagem pode ter mudado enquanto o jogador esperava: se não servir mais, entra sem.
+            with contextlib.suppress(DomainError):
+                character = await _validate_character(session, room, user, request.character_id)
+        member = await _add_player(session, room, user, character, member)
+        if character:
+            member.character_id = character.id
+    await session.delete(request)
+    await session.commit()
+
+
+async def deny_request(session: AsyncSession, room: Room, master: User, user_id: uuid.UUID) -> None:
+    _require_master(room, master)
+    request = await _pending(session, room, user_id)
+    request.status = JoinRequestStatus.DENIED
+    request.updated_at = datetime.now(UTC)
+    await session.commit()
+
+
+async def set_require_approval(session: AsyncSession, room: Room, master: User, value: bool) -> None:
+    _require_master(room, master)
+    room.require_approval = value
+    await session.commit()
 
 
 async def set_character(session: AsyncSession, room: Room, user: User, character_id: uuid.UUID) -> None:
@@ -248,6 +404,13 @@ async def room_out(
             )
         )
     pack = registry.get(room.ruleset_id)
+    waiting = 0
+    if my_role == RoomRole.MASTER:
+        waiting = await session.scalar(
+            select(func.count())
+            .select_from(RoomJoinRequest)
+            .where(RoomJoinRequest.room_id == room.id, RoomJoinRequest.status == JoinRequestStatus.PENDING)
+        )
     return RoomOut(
         id=room.id,
         pin=room.pin,
@@ -260,4 +423,6 @@ async def room_out(
         members=members,
         created_at=room.created_at,
         last_activity_at=room.last_activity_at,
+        require_approval=room.require_approval,
+        pending_requests=waiting or 0,
     )

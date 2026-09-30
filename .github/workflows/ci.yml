@@ -61,6 +61,15 @@ jobs:
         run: PGPASSWORD=rpg psql -h localhost -U rpg -d rpg -c "CREATE DATABASE rpg_test"
       - name: Testes no Postgres
         run: pytest -q
+      - name: Link rápido com a Cloudflare de verdade (serviço externo, não bloqueia o CI)
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          RPG_DATABASE_URL: ""
+          RPG_DATA_DIR: /tmp/rpgplay-tunnel
+          RPG_PORT: "18080"
+          RPG_DISCOVERY_ENABLED: "false"
+        run: python scripts/smoke_tunnel.py
 
   web:
     name: painel do Mestre (web)

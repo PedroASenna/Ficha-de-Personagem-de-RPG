@@ -14,16 +14,20 @@ type ServerState = {
   server: ServerInfo | null;
   /** PIN vindo do QR code: entra na mesa assim que o login terminar. */
   pendingPin: string | null;
+  /** Código de acesso vindo do convite: preenche a criação de conta pela internet. */
+  pendingCode: string | null;
   restore: () => Promise<void>;
   choose: (server: ServerInfo) => Promise<void>;
   forget: () => Promise<void>;
   setPendingPin: (pin: string | null) => void;
+  setPendingCode: (code: string | null) => void;
 };
 
 export const useServer = create<ServerState>((set) => ({
   status: 'loading',
   server: null,
   pendingPin: null,
+  pendingCode: null,
   restore: async () => {
     let server: ServerInfo | null = null;
     try {
@@ -43,6 +47,7 @@ export const useServer = create<ServerState>((set) => ({
     set({ server: null });
   },
   setPendingPin: (pendingPin) => set({ pendingPin }),
+  setPendingCode: (pendingCode) => set({ pendingCode }),
 }));
 
 /** URL base do servidor atual (ex.: http://192.168.0.20:8080). */

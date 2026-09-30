@@ -1,6 +1,6 @@
 ; Instalador do servidor RPG Play para Windows (NSIS 3, Unicode).
 ;
-;   makensis /DVERSION=0.4.0 /DSRC=<pasta rpgplay-server do PyInstaller> /DOUTFILE=<saída.exe> installer.nsi
+;   makensis /DVERSION=0.5.0 /DSRC=<pasta rpgplay-server do PyInstaller> /DOUTFILE=<saída.exe> installer.nsi
 ;
 ; Instala em "Arquivos de Programas\RPG Play Servidor", guarda campanhas em "ProgramData\RPG Play\servidor"
 ; (mantidas ao desinstalar, a não ser que a pessoa peça para apagar), cria os atalhos do menu Iniciar,
@@ -122,6 +122,9 @@ Section "Servidor RPG Play" SecMain
   FileSeek $0 0x15 SET
   FileWriteByte $0 $1
   FileClose $0
+  ; Jogar pela internet: o link e o código de acesso, e o link fixo pelo Tailscale (uma vez só).
+  CreateShortCut "$SMPROGRAMS\${APP}\Jogar pela internet (link e código).lnk" "$SYSDIR\cmd.exe" '/k ""$INSTDIR\${EXE}" internet"' "$INSTDIR\rpgplay.ico" 0
+  CreateShortCut "$SMPROGRAMS\${APP}\Link fixo pela internet (Tailscale).lnk" "$SYSDIR\cmd.exe" '/k ""$INSTDIR\${EXE}" internet fixo"' "$INSTDIR\rpgplay.ico" 0
   CreateShortCut "$SMPROGRAMS\${APP}\Pasta das campanhas.lnk" "$DataDir"
   WriteINIStr "$SMPROGRAMS\${APP}\Painel do Mestre (navegador).url" "InternetShortcut" "URL" "http://localhost:8080/mestre/"
   CreateShortCut "$SMPROGRAMS\${APP}\Desinstalar.lnk" "$INSTDIR\Desinstalar.exe"

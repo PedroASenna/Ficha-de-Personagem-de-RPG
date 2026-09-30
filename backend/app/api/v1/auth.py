@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AppState, get_current_user, get_db, get_state
+from app.core.errors import AccessCodeError
+from app.core.origin import client_key, is_remote
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -37,8 +39,22 @@ async def _issue_tokens(db: AsyncSession, state: AppState, user: User) -> TokenO
 
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterIn, db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)):
+async def register(
+    data: RegisterIn, request: Request, db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)
+):
+    remote = is_remote(request.scope, state.settings)
+    if remote:
+        # Pela internet: só com o acesso ligado e o código que o Mestre passou.
+        if not state.limiters.register.allow(f"register:{client_key(request.scope, state.settings)}"):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde alguns minutos.")
+        if not state.remote.enabled:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "O cadastro pela internet está desligado neste servidor.")
+        if not state.remote.code_matches(data.access_code):
+            raise AccessCodeError("Código de acesso incorreto. Peça o código ao Mestre.")
     active_users = await db.scalar(select(func.count()).select_from(User).where(User.deleted_at.is_(None)))
+    if remote and not active_users:
+        # O primeiro cadastro vira admin: esse tem que ser feito em casa.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Crie a conta do dono do servidor na rede de casa primeiro.")
     # O primeiro cadastro sempre é permitido (é o dono do servidor) e vira admin.
     if active_users and not state.settings.allow_registration:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cadastro fechado neste servidor. Peça ao admin.")
@@ -62,9 +78,12 @@ async def register(data: RegisterIn, db: AsyncSession = Depends(get_db), state: 
 async def login(
     data: LoginIn, request: Request, db: AsyncSession = Depends(get_db), state: AppState = Depends(get_state)
 ):
-    client = request.client.host if request.client else "?"
+    client = client_key(request.scope, state.settings)
     if not state.limiters.login.allow(f"login:{client}:{data.username}"):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde um minuto.")
+    # Pela internet o IP muda fácil: também um limite por conta, somando todos os IPs.
+    if is_remote(request.scope, state.settings) and not state.limiters.login_user.allow(f"login:{data.username}"):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde alguns minutos.")
     user = await db.scalar(select(User).where(User.username == data.username, User.deleted_at.is_(None)))
     if user is None or not verify_password(user.password_hash, data.password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário ou senha incorretos.")

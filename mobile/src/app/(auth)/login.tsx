@@ -1,10 +1,14 @@
-/** Entrar ou criar conta no servidor da casa (usuário + senha; as contas ficam no servidor). */
+/**
+ * Entrar ou criar conta no servidor da casa (usuário + senha; as contas ficam no servidor). Pela internet,
+ * criar conta pede o código de acesso que o Mestre passa (o convite já preenche).
+ */
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { Screen } from '../../components/common/Screen';
 import { api, ApiError } from '../../lib/api';
+import { normalizeAccessCode } from '../../lib/discovery';
 import { useServer } from '../../state/server';
 import { useSession } from '../../state/session';
 
@@ -16,7 +20,11 @@ export default function LoginScreen() {
   const server = useServer((s) => s.server);
   const forgetServer = useServer((s) => s.forget);
   const registrationOpen = server?.registrationOpen ?? true;
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const needsCode = server?.accessCodeRequired ?? false;
+  const pendingCode = useServer((s) => s.pendingCode);
+  // Veio de um convite com código: o jogador provavelmente ainda não tem conta.
+  const [mode, setMode] = useState<'login' | 'register'>(needsCode && pendingCode && registrationOpen ? 'register' : 'login');
+  const [code, setCode] = useState(pendingCode ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -24,7 +32,11 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const validUser = USERNAME.test(username);
-  const canSubmit = validUser && password.length >= (mode === 'register' ? 8 : 1) && (mode === 'login' || name.trim().length >= 2);
+  const validCode = !needsCode || normalizeAccessCode(code) !== null;
+  const canSubmit =
+    validUser &&
+    password.length >= (mode === 'register' ? 8 : 1) &&
+    (mode === 'login' || (name.trim().length >= 2 && validCode));
 
   const submit = async () => {
     setBusy(true);
@@ -33,7 +45,12 @@ export default function LoginScreen() {
       const tokens =
         mode === 'login'
           ? await api.login(username, password)
-          : await api.register({ username, password, display_name: name.trim() });
+          : await api.register({
+              username,
+              password,
+              display_name: name.trim(),
+              ...(needsCode ? { access_code: normalizeAccessCode(code) ?? code } : {}),
+            });
       await setTokens(tokens);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível entrar.');
@@ -77,6 +94,20 @@ export default function LoginScreen() {
             3 a 32 letras minúsculas, números, ponto, hífen ou _
           </HelperText>
           <TextInput label="Como te chamam na mesa" value={name} onChangeText={setName} maxLength={40} mode="outlined" />
+          {needsCode ? (
+            <>
+              <TextInput
+                label="Código de acesso"
+                value={code}
+                onChangeText={(t) => setCode(t.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 9))}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                mode="outlined"
+                placeholder="ABCD-EFGH"
+              />
+              <HelperText type="info">Você está conectando pela internet: peça o código ao Mestre.</HelperText>
+            </>
+          ) : null}
         </>
       ) : null}
       <TextInput
@@ -95,7 +126,9 @@ export default function LoginScreen() {
       </Button>
       {!registrationOpen ? (
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          O cadastro está fechado neste servidor. Peça para o Mestre liberar ou criar sua conta.
+          {needsCode
+            ? 'O cadastro pela internet está desligado neste servidor. Peça para o Mestre ligar o acesso pela internet.'
+            : 'O cadastro está fechado neste servidor. Peça para o Mestre liberar ou criar sua conta.'}
         </Text>
       ) : null}
       <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>

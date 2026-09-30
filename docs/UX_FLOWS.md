@@ -8,6 +8,7 @@ Princípio do produto: **um personagem jogável em menos de 1 minuto** e, para q
 flowchart TD
   Server["Encontrar servidor<br/>varredura do Wi-Fi · IP digitado · QR code"] --> Login["Entrar / Criar conta<br/>usuário + senha do servidor"]
   QR["QR code do Mestre<br/>rpgplay://join?server&pin"] --> Server
+  Invite["Convite pela internet<br/>https://…/entrar → rpgplay://join?server&pin&code"] --> Server
   Login --> Tabs
   subgraph Tabs["Abas (Material 3 bottom navigation)"]
     Chars["Personagens"]
@@ -20,6 +21,8 @@ flowchart TD
   Chars -- "Passo a passo" --> Wizard
   Wizard --> HUD
   Rooms -- "PIN ou QR code" --> Room["Mesa: aba Mesa | aba Mapa"]
+  Rooms -- "mesa com aprovação" --> Wait["Sala de espera<br/>até o Mestre aceitar"]
+  Wait --> Room
   Room -- "sem personagem compatível" --> Wizard
   Account --> Pass["Trocar senha"] & Switch["Trocar servidor"] & Export["Exportar dados"] & Delete["Excluir conta"]
 ```
@@ -122,6 +125,14 @@ Layout em três colunas, pensado para monitor de PC:
 - As **peças de cenário** e os **objetos** aparecem girados como o Mestre montou; quem está num objeto com ocupantes ocultos não aparece (só o próprio boneco).
 - **Névoa de guerra:** tudo que o personagem do jogador ainda não explorou fica **preto** e vai clareando conforme ele anda. Bonecos debaixo do preto não respondem ao toque.
 - Aba **Mundo**: o mapa-múndi (pinça para zoom, toque duplo volta) quando o Mestre libera, e as fichas das nações e facções já descobertas, com as relações conhecidas.
+
+## G. Jogar pela internet
+
+- **Admin (painel):** globo **Internet** na lista de mesas (fica dourado quando ligado). Três opções: Desligado, **Link rápido (Cloudflare)** e **Link fixo (Tailscale)**. A situação aparece ao vivo ("Baixando o programa da Cloudflare…", "Abrindo o link…", "No ar", "Com problema" com o motivo), com o link, o **código de acesso** (copiar, trocar) e, no link fixo, o passo a passo e "Conferir de novo".
+- **Mestre (mesa):** "Conectar celulares" ganha as abas **Na mesma rede (Wi-Fi)** e **Pela internet**. Na da internet: QR code com o link e o código, **Copiar convite** (texto pronto para o WhatsApp com o link `/entrar`), o link e "código · PIN" em letras grandes. Embaixo, nas duas abas, o interruptor **Aprovar entrada**.
+- **Pedidos de entrada:** uma faixa no topo da mesa, "Ana (@ana) com Lyra quer entrar na mesa pela internet", com **Aceitar** e **Recusar**, e um aviso quando chega pedido novo. Na lista de mesas, o cartão mostra "1 pedido de entrada".
+- **Jogador (convite):** abre o link `/entrar` no celular → **Abrir no app RPG Play** → o app configura o servidor e abre "Criar conta" com o **Código de acesso** já preenchido (sem o convite, o campo aparece vazio, com a dica "peça o código ao Mestre").
+- **Sala de espera:** entrando pelo PIN numa mesa com aprovação, o app mostra "Esperando o Mestre" e abre a mesa sozinho quando ele aceita. Recusado: "Entrada não aceita" (pode pedir de novo depois de 10 minutos). "Voltar" não cancela o pedido.
 
 ## Material Design 3 e acessibilidade
 

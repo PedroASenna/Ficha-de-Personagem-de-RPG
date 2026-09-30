@@ -4,6 +4,8 @@
 #   sudo rpgplay-server info                      endereços para conectar
 #   sudo rpgplay-server diagnostico               por que o celular não conecta? (firewall, rede)
 #   sudo rpgplay-server liberar-firewall          libera as portas no ufw/firewalld só para a rede de casa
+#   sudo rpgplay-server internet                  link e código de acesso para jogar pela internet
+#   sudo rpgplay-server internet fixo             liga o link fixo (Tailscale Funnel)
 #   sudo rpgplay-server reset-password <usuário>  nova senha para quem esqueceu
 #   sudo rpgplay-server make-admin <usuário>
 #   sudo rpgplay-server backup <arquivo.tar.gz>
@@ -48,8 +50,8 @@ case "${1:-}" in
     if [ "$was_running" = 1 ]; then systemctl start rpgplay-server; fi
     exit "$status"
     ;;
-  diagnostico|liberar-firewall)
-    # Consultam/alteram o firewall (precisam de root) e não escrevem no diretório de dados.
+  diagnostico|liberar-firewall|internet)
+    # Consultam/alteram o firewall ou o Tailscale (precisam de root) e não escrevem no diretório de dados.
     exec "$BIN" "$@"
     ;;
   *)

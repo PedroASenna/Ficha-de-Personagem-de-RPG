@@ -43,12 +43,12 @@ Descoberta, portas e segurança: [REDE_LOCAL.md](REDE_LOCAL.md). Instalação: [
 RPG-Play/
 ├── backend/                  Servidor (Python 3.11+ · FastAPI)
 │   ├── app/
-│   │   ├── api/v1/           discovery · auth · admin · me · rulesets · characters · rooms · table · dice · uploads · moderation
-│   │   ├── core/             config (modo casa: data_dir, segredos gerados) · security (Argon2/JWT) · discovery (UDP) · rate_limit
+│   │   ├── api/v1/           discovery · auth · admin · remote (internet) · me · rulesets · characters · rooms · table · dice · uploads · moderation
+│   │   ├── core/             config (modo casa: data_dir, segredos gerados) · security (Argon2/JWT) · discovery (UDP) · rate_limit · origin (casa ou internet?)
 │   │   ├── db/               Base declarativa, sessão assíncrona (aiosqlite/asyncpg; pragmas WAL no SQLite)
 │   │   ├── models/           User, Character, Room, RoomMember, SessionEvent, Scene, Npc, Token, ...
 │   │   ├── rulesets/         pacotes SRD 5.1, SRD 5.2.1, Genérico, GURPS 4ª Edição, Savage Worlds + catálogo
-│   │   ├── services/         dice/* (notação, dados que explodem, testes) · characters · engines/* (fichas GURPS e Savage) · hp · rooms · table · media · account
+│   │   ├── services/         dice/* (notação, dados que explodem, testes) · characters · engines/* (fichas GURPS e Savage) · hp · rooms · table · media · account · remote (túneis Cloudflare/Tailscale)
 │   │   ├── ws/               protocol · router · events · table_events (quem recebe cada evento da mesa) · broadcaster
 │   │   ├── main.py           app factory; monta /media e o painel /mestre (fallback de SPA)
 │   │   └── server_cli.py     `rpgplay-server`: serve · info · reset-password · make-admin · backup · restore · purge
@@ -86,6 +86,8 @@ erDiagram
   RULESETS ||--o{ CHARACTERS : "regras"
   RULESETS ||--o{ ROOMS : "regras (fixas)"
   ROOMS ||--o{ ROOM_MEMBERS : ""
+  ROOMS ||--o{ ROOM_JOIN_REQUESTS : "pedidos de entrada"
+  USERS ||--o{ ROOM_JOIN_REQUESTS : "espera o Mestre"
   ROOMS ||--o{ SESSION_EVENTS : "log"
   ROOMS ||--o{ SCENES : "cenas"
   ROOMS ||--o{ NPCS : "inimigos"
@@ -122,6 +124,14 @@ erDiagram
     timestamptz last_activity_at
     string world_map_key "mapa-múndi"
     bool world_visible "jogadores veem a imagem"
+    bool require_approval "quem entra pelo PIN espera o Mestre"
+  }
+  ROOM_JOIN_REQUESTS {
+    uuid room_id PK
+    uuid user_id PK
+    uuid character_id FK "personagem escolhido"
+    string status "pending | denied (10 min)"
+    bool remote "pediu pela internet"
   }
   SCENES {
     uuid id PK
@@ -339,3 +349,4 @@ Códigos de fechamento: `4401` token inválido · `4403` não é membro / foi re
 - **Backup consistente** com o servidor ligado (API de backup do SQLite) e **restauração** que guarda os dados anteriores.
 - **Expurgo diário** pelo timer systemd `rpgplay-server-purge.timer`.
 - **Limites de frequência** em memória (por processo).
+- **Acesso pela internet:** o `serve` escuta na porta de casa e em `127.0.0.1:RPG_PORT+1`, onde os túneis grátis (Cloudflare Quick Tunnel ou Tailscale Funnel) entregam as conexões de fora. O `RemoteAccess` (`services/remote.py`) sobe e derruba o `cloudflared` junto com o servidor. Detalhes e modelo de segurança: [REDE_LOCAL.md](REDE_LOCAL.md#acesso-pela-internet).

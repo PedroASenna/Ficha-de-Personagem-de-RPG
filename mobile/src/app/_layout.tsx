@@ -8,6 +8,7 @@ import { ActivityIndicator, PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { api } from '../lib/api';
+import { joinByPin, openJoined } from '../lib/joining';
 import { initFeedback } from '../lib/feedback';
 import { useServer } from '../state/server';
 import { useSession } from '../state/session';
@@ -51,9 +52,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (!signedIn || !pendingPin) return;
     setPendingPin(null);
-    api
-      .joinRoom(pendingPin)
-      .then((room) => router.push({ pathname: '/room/[pin]', params: { pin: room.pin } }))
+    joinByPin(pendingPin)
+      .then((outcome) => openJoined(outcome, pendingPin))
       .catch(() => router.push({ pathname: '/rooms', params: { pin: pendingPin } }));
   }, [signedIn, pendingPin, setPendingPin]);
 
@@ -80,6 +80,7 @@ export default function RootLayout() {
                     <Stack.Screen name="character/edit" options={{ title: 'Editar ficha' }} />
                     <Stack.Screen name="room/create" options={{ title: 'Criar mesa' }} />
                     <Stack.Screen name="room/[pin]" options={{ title: 'Mesa' }} />
+                    <Stack.Screen name="room/waiting" options={{ title: 'Sala de espera' }} />
                   </Stack.Protected>
                   <Stack.Protected guard={hasServer && !signedIn}>
                     <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />

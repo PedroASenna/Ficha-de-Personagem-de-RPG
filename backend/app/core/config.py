@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     # Build do painel web do Mestre, servido em /mestre (o pacote .deb aponta para o dist embutido).
     web_dist_dir: str | None = None
 
+    # Acesso pela internet: os túneis (Cloudflare, Tailscale) entregam em 127.0.0.1 nesta porta, e tudo o que
+    # chega por ela é tratado como "de fora" (código de acesso no cadastro). 0 = porta + 1.
+    # internet_enabled=false tira a opção do painel (quem nunca quer jogar pela internet).
+    internet_enabled: bool = True
+    internet_port: int = 0
+    # Programas do túnel. Vazio = procura no PATH (o cloudflared é baixado na primeira vez, se faltar).
+    cloudflared_path: str | None = None
+    cloudflared_download_url: str = "https://github.com/cloudflare/cloudflared/releases/latest/download"
+    tailscale_path: str | None = None
+
     ws_auth_timeout_seconds: float = 5.0
     event_retention_days: int = 90
     account_purge_days: int = 30
@@ -66,6 +76,10 @@ class Settings(BaseSettings):
         if self.media_backend == "gcs" and not self.gcs_bucket:
             raise ValueError("RPG_GCS_BUCKET é obrigatório com media_backend=gcs")
         return self
+
+    @property
+    def remote_port(self) -> int:
+        return self.internet_port or self.port + 1
 
     @property
     def data_path(self) -> Path:

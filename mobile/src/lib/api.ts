@@ -5,6 +5,7 @@ import type {
   AdvanceChoice,
   AttributeMethod,
   Character,
+  JoinStatus,
   RollResponse,
   Room,
   RulesetPack,
@@ -87,7 +88,7 @@ async function request<T>(path: string, { method = 'GET', body, form, auth = tru
 }
 
 export const api = {
-  register: (body: { username: string; password: string; display_name: string }) =>
+  register: (body: { username: string; password: string; display_name: string; access_code?: string }) =>
     request<TokenPair>('/auth/register', { method: 'POST', body, auth: false }),
   login: (username: string, password: string) =>
     request<TokenPair>('/auth/login', { method: 'POST', body: { username, password }, auth: false }),
@@ -140,6 +141,7 @@ export const api = {
   createRoom: (name: string, ruleset_id: string, max_players = 8) =>
     request<Room>('/rooms', { method: 'POST', body: { name, ruleset_id, max_players } }),
   joinRoom: (pin: string, character_id?: string) => request<Room>('/rooms/join', { method: 'POST', body: { pin, character_id } }),
+  joinStatus: (pin: string) => request<JoinStatus>(`/rooms/join-status?pin=${encodeURIComponent(pin)}`),
   roomEvents: (roomId: string) => request<SessionEvent[]>(`/rooms/${roomId}/events`),
   setRoomCharacter: (roomId: string, character_id: string) =>
     request<Room>(`/rooms/${roomId}/character`, { method: 'PUT', body: { character_id } }),

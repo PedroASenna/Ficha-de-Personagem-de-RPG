@@ -1,4 +1,4 @@
-/** Link rpgplay://join?server=...&pin=... (QR code lido pela câmera do sistema). */
+/** Link rpgplay://join?server=...&pin=...&code=... (QR code lido pela câmera do sistema ou convite /entrar). */
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Button, HelperText, Text } from 'react-native-paper';
@@ -7,16 +7,18 @@ import { Screen } from '../components/common/Screen';
 import { connectFromJoinLink } from '../lib/connect';
 
 export default function JoinLinkScreen() {
-  const { server, pin } = useLocalSearchParams<{ server?: string; pin?: string }>();
+  const { server, pin, code } = useLocalSearchParams<{ server?: string; pin?: string; code?: string }>();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const link = `rpgplay://join?server=${encodeURIComponent(server ?? '')}&pin=${encodeURIComponent(pin ?? '')}`;
+    const link =
+      `rpgplay://join?server=${encodeURIComponent(server ?? '')}&pin=${encodeURIComponent(pin ?? '')}` +
+      `&code=${encodeURIComponent(code ?? '')}`;
     void connectFromJoinLink(link).then((result) => {
       if (result.ok) router.replace('/');
       else setError(result.error);
     });
-  }, [server, pin]);
+  }, [server, pin, code]);
 
   return (
     <Screen>

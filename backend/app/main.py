@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
+from app.api import invite
 from app.api.deps import AppState, Limiters
 from app.api.v1 import api_router
 from app.core.config import Settings, ensure_runtime_secrets, get_settings, server_id
@@ -17,6 +18,7 @@ from app.db.session import Database
 from app.rulesets.loader import get_registry, sync_rulesets
 from app.services.character_rules import RulesError
 from app.services.media import build_media_store
+from app.services.remote import RemoteAccess
 from app.ws.broadcaster import Broadcaster, InMemoryBroadcaster, RedisBroadcaster
 from app.ws.manager import ConnectionManager
 from app.ws.router import router as ws_router
@@ -65,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await sync_rulesets(session, registry)
         broadcaster = _build_broadcaster(settings)
         await broadcaster.start()
+        remote = RemoteAccess(settings, server_id(settings))
         state = AppState(
             settings=settings,
             db=db,
@@ -78,10 +81,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 hp=RateLimiter(30, 10),
                 upload=RateLimiter(20, 60),
                 table=RateLimiter(60, 5),
+                register=RateLimiter(10, 600),
+                login_user=RateLimiter(20, 300),
             ),
+            remote=remote,
             server_id=server_id(settings),
         )
         app.state.ctx = state
+        # Liga o túnel de novo se o Mestre deixou a internet ligada (o link rápido muda a cada abertura).
+        await remote.start()
         discovery = None
         if settings.discovery_enabled:
             discovery = await start_discovery(
@@ -99,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await remote.stop()
             if discovery is not None:
                 discovery.close()
             await broadcaster.stop()
@@ -128,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(api_router)
     app.include_router(ws_router)
+    app.include_router(invite.router)
 
     if settings.media_backend == "local":
         settings.media_path.mkdir(parents=True, exist_ok=True)

@@ -31,6 +31,8 @@ export default defineConfig({
       // Com o executável empacotado, vale o painel que vai dentro dele; senão, o web/dist recém-compilado.
       ...(process.env.RPG_SERVER_BIN ? {} : { RPG_WEB_DIST_DIR: "dist" }),
       RPG_SERVER_NAME: "Mesa E2E",
+      // Link rápido com um cloudflared falso (o teste não sai para a internet).
+      RPG_CLOUDFLARED_PATH: "./e2e/fake-cloudflared.mjs",
     },
   },
 });

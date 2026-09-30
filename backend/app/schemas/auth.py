@@ -19,6 +19,8 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=2, max_length=40)
     locale: str = Field(default="pt-BR", max_length=10)
+    # Só pedido para quem cria a conta pela internet (o Mestre passa junto com o link).
+    access_code: str | None = Field(default=None, max_length=20)
 
     @field_validator("username")
     @classmethod
@@ -90,3 +92,7 @@ class DiscoveryOut(BaseModel):
     master_path: str = "/mestre"
     # IPs do servidor na rede local (o painel do Mestre usa para montar o QR code dos celulares).
     addresses: list[str] = Field(default_factory=list)
+    # O Mestre ligou o acesso pela internet.
+    internet: bool = False
+    # Esta conexão veio pela internet: criar conta pede o código de acesso.
+    access_code_required: bool = False

@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, String, func, text
+from sqlalchemy import ForeignKey, Index, String, false, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, BigIntPK, TimestampMixin
-from app.models.enums import RoomRole, RoomStatus, SessionEventType, Visibility, str_enum
+from app.models.enums import JoinRequestStatus, RoomRole, RoomStatus, SessionEventType, Visibility, str_enum
 
 
 class Room(TimestampMixin, Base):
@@ -40,6 +40,8 @@ class Room(TimestampMixin, Base):
     world_map_width: Mapped[int | None]
     world_map_height: Mapped[int | None]
     world_visible: Mapped[bool] = mapped_column(default=False)
+    # Quem entra pelo PIN espera o Mestre aceitar (liga sozinho quando o servidor está aberto na internet).
+    require_approval: Mapped[bool] = mapped_column(default=False, server_default=false())
 
 
 class RoomMember(Base):
@@ -51,6 +53,23 @@ class RoomMember(Base):
     role: Mapped[RoomRole] = mapped_column(str_enum(RoomRole))
     joined_at: Mapped[datetime] = mapped_column(server_default=func.now())
     kicked_at: Mapped[datetime | None]
+
+
+class RoomJoinRequest(TimestampMixin, Base):
+    """Pedido de entrada numa mesa com "Aprovar entrada": o jogador espera até o Mestre aceitar ou recusar.
+
+    Aceito, vira RoomMember e o pedido some. Recusado, fica guardado alguns minutos para o jogador não
+    insistir; depois disso ele pode pedir de novo.
+    """
+
+    __tablename__ = "room_join_requests"
+
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    character_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("characters.id", ondelete="SET NULL"))
+    status: Mapped[JoinRequestStatus] = mapped_column(str_enum(JoinRequestStatus), default=JoinRequestStatus.PENDING)
+    # Pediu pela internet (o painel mostra, para o Mestre saber que não é alguém da sala).
+    remote: Mapped[bool] = mapped_column(default=False)
 
 
 class SessionEvent(Base):

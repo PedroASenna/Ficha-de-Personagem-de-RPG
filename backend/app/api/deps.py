@@ -12,6 +12,7 @@ from app.db.session import Database
 from app.models import User
 from app.rulesets.loader import RulesetRegistry
 from app.services.media import MediaStore
+from app.services.remote import RemoteAccess
 from app.ws.broadcaster import Broadcaster
 
 
@@ -23,6 +24,9 @@ class Limiters:
     hp: RateLimiter
     upload: RateLimiter
     table: RateLimiter
+    # Só para quem vem pela internet: cadastro por IP e login por usuário (de qualquer IP).
+    register: RateLimiter
+    login_user: RateLimiter
 
 
 @dataclass
@@ -33,6 +37,7 @@ class AppState:
     media: MediaStore
     broadcaster: Broadcaster
     limiters: Limiters
+    remote: RemoteAccess
     server_id: str = ""
 
 

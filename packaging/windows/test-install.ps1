@@ -29,6 +29,8 @@ Assert (Test-Path $Exe) "executável instalado"
 Assert (Test-Path "$Data\servidor.env") "servidor.env na pasta das campanhas"
 Assert (Test-Path "$Menu\RPG Play Servidor.lnk") "atalho no menu Iniciar"
 Assert (Test-Path "$Menu\Liberar no firewall.lnk") "atalho do firewall"
+Assert (Test-Path "$Menu\Link fixo pela internet (Tailscale).lnk") "atalho do link fixo"
+Assert (Test-Path "$Menu\Jogar pela internet (link e código).lnk") "atalho de jogar pela internet"
 Assert (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\RPG Play Servidor.lnk") "abre junto com o Windows"
 Assert (Test-Rule) "regra no Firewall do Windows"
 $RuleText = (netsh advfirewall firewall show rule name="$Rule" verbose) -join "`n"
@@ -64,6 +66,19 @@ try {
   $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$from)) | ConvertFrom-Json
   $udp.Close()
   Assert ($reply.app -eq "rpgplay") "descoberta UDP"
+
+  # Porta de internet (127.0.0.1:8081): o que chega por ela é "de fora" e o cadastro pede o código de acesso.
+  $remote = Invoke-RestMethod "http://127.0.0.1:8081/api/v1/discovery"
+  Assert ($remote.access_code_required -eq $true -and $remote.addresses.Count -eq 0) "porta de internet"
+  $outside = @{ username = "de_fora"; password = "senha-de-fora"; display_name = "De Fora" } | ConvertTo-Json
+  try {
+    Invoke-RestMethod "http://127.0.0.1:8081/api/v1/auth/register" -Method Post -ContentType "application/json" -Body $outside | Out-Null
+    $outsideStatus = 201
+  } catch { $outsideStatus = $_.Exception.Response.StatusCode.value__ }
+  Assert ($outsideStatus -eq 403) "cadastro de fora recusado com a internet desligada"
+  $internet = (& $Exe internet) -join "`n"
+  Write-Host $internet
+  Assert ($internet -match "Jogar pela internet: desligado") "comando internet"
 
   $diag = (& $Exe diagnostico) -join "`n"
   Write-Host $diag

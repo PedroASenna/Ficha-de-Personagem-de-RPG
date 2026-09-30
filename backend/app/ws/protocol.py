@@ -16,6 +16,7 @@ Servidor → cliente
     image.upserted/deleted (peças de cenário) · object.upserted/deleted (com os ocupantes que andaram junto)
     fog.revealed/reset (névoa: o jogador só recebe a do próprio personagem) · world.updated (mapa-múndi)
     character.leveled · view.reset (a cena do jogador mudou) · party.updated (entrou/saiu alguém do grupo)
+    join.requests (Mestre: pedidos de entrada esperando aprovação)
 """
 
 import uuid

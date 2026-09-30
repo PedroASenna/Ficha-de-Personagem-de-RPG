@@ -150,3 +150,14 @@ def test_cli_reset_password_backup_and_purge(tmp_path, monkeypatch, capsys):
         assert settings.sqlalchemy_url.startswith("sqlite")
     finally:
         get_settings.cache_clear()
+
+
+def test_version_matches_pyproject():
+    import tomllib
+    from pathlib import Path
+
+    from app import __version__
+
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+    # O servidor anuncia esta versão na descoberta e no painel.
+    assert __version__ == pyproject["project"]["version"]

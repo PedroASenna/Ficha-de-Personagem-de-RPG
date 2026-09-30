@@ -357,7 +357,12 @@ export type Room = {
   my_role: 'master' | 'player';
   members: RoomMember[];
   created_at: string;
+  /** Quem entra pelo PIN espera o Mestre aceitar. */
+  require_approval?: boolean;
 };
+
+/** Sala de espera: o Mestre já decidiu? */
+export type JoinStatus = { status: 'pending' | 'approved' | 'denied'; room: Room | null };
 
 export type SessionEvent = {
   id: number;

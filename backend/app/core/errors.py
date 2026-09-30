@@ -27,3 +27,19 @@ class ConflictError(DomainError):
 class RateLimitedError(DomainError):
     status = 429
     code = "rate_limited"
+
+
+class AccessCodeError(ForbiddenError):
+    """Cadastro pela internet sem o código de acesso certo."""
+
+    code = "access_code"
+
+
+class JoinPendingError(ConflictError):
+    """A mesa pede aprovação: o jogador fica esperando o Mestre aceitar."""
+
+    code = "join_pending"
+
+
+class JoinDeniedError(ForbiddenError):
+    code = "join_denied"

@@ -1,14 +1,25 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AppState, get_current_user, get_db, get_state
-from app.core.errors import NotFoundError, RateLimitedError
-from app.models import Room, RoomMember, User
+from app.core.errors import JoinPendingError, NotFoundError, RateLimitedError
+from app.core.origin import is_remote
+from app.models import Room, RoomJoinRequest, RoomMember, User
 from app.models.enums import RoomStatus
-from app.schemas.rooms import EventOut, KickIn, RoomCreate, RoomJoin, RoomOut, SetCharacterIn
+from app.schemas.rooms import (
+    EventOut,
+    JoinRequestOut,
+    JoinStatusOut,
+    KickIn,
+    RoomCreate,
+    RoomJoin,
+    RoomOut,
+    RoomPatch,
+    SetCharacterIn,
+)
 from app.services import rooms as service
 from app.ws import table_events
 from app.ws.protocol import server_message
@@ -36,7 +47,10 @@ async def create_room(
     state: AppState = Depends(get_state),
 ):
     """O Mestre escolhe o sistema de regras aqui; ele fica fixo durante toda a sala."""
-    room = await service.create_room(db, user, data.name, data.ruleset_id, data.max_players, state.registry)
+    approval = data.require_approval if data.require_approval is not None else state.remote.enabled
+    room = await service.create_room(
+        db, user, data.name, data.ruleset_id, data.max_players, state.registry, require_approval=approval
+    )
     return await _view(db, state, room, user)
 
 
@@ -63,16 +77,38 @@ async def my_rooms(
 @router.post("/join", response_model=RoomOut)
 async def join_room(
     data: RoomJoin,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     state: AppState = Depends(get_state),
 ):
+    """Entra pelo PIN. Se a mesa pede aprovação, responde 409 ``join_pending`` e o app vai para a sala de
+    espera (``GET /rooms/join-status``) até o Mestre aceitar; recusado, 403 ``join_denied``."""
     # Limite contra força bruta de PIN (32^6 combinações, mas nunca custa travar).
     if not state.limiters.join_pin.allow(f"join:{user.id}"):
         raise RateLimitedError("Muitas tentativas de PIN. Aguarde um minuto.")
-    room = await service.join_room(db, user, data.pin, data.character_id)
-    await table_events.party_updated(state, db, room)
-    return await _view(db, state, room, user)
+    result = await service.join_room(
+        db, user, data.pin, data.character_id, remote=is_remote(request.scope, state.settings)
+    )
+    if isinstance(result, RoomJoinRequest):
+        room = await _room(db, result.room_id)
+        await table_events.join_requests(state, db, room)
+        raise JoinPendingError(f"Pedido enviado. Espere o Mestre de “{room.name}” aceitar sua entrada.")
+    await table_events.party_updated(state, db, result)
+    return await _view(db, state, result, user)
+
+
+@router.get("/join-status", response_model=JoinStatusOut)
+async def join_status(
+    pin: str = Query(min_length=6, max_length=6),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    """Sala de espera: o Mestre já aceitou? (com a mesa, quando aceitou)"""
+    status_, room = await service.join_status(db, user, pin.strip().upper())
+    view = await _view(db, state, room, user) if status_ == "approved" else None
+    return JoinStatusOut(status=status_, room=view)
 
 
 @router.get("/{room_id}", response_model=RoomOut)
@@ -84,6 +120,61 @@ async def read_room(
 ):
     room = await _room(db, room_id)
     await service.require_member(db, room, user)
+    return await _view(db, state, room, user)
+
+
+@router.patch("/{room_id}", response_model=RoomOut)
+async def update_room(
+    room_id: uuid.UUID,
+    data: RoomPatch,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    room = await _room(db, room_id)
+    if data.require_approval is not None:
+        await service.set_require_approval(db, room, user, data.require_approval)
+    else:
+        await service.require_member(db, room, user)
+    return await _view(db, state, room, user)
+
+
+@router.get("/{room_id}/requests", response_model=list[JoinRequestOut])
+async def join_requests(
+    room_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Quem está esperando o Mestre aceitar a entrada."""
+    return await service.list_requests(db, await _room(db, room_id), user)
+
+
+@router.post("/{room_id}/requests/{user_id}/approve", response_model=RoomOut)
+async def approve_request(
+    room_id: uuid.UUID,
+    user_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    room = await _room(db, room_id)
+    await service.approve_request(db, room, user, user_id)
+    await table_events.join_requests(state, db, room)
+    await table_events.party_updated(state, db, room)
+    return await _view(db, state, room, user)
+
+
+@router.post("/{room_id}/requests/{user_id}/deny", response_model=RoomOut)
+async def deny_request(
+    room_id: uuid.UUID,
+    user_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    state: AppState = Depends(get_state),
+):
+    room = await _room(db, room_id)
+    await service.deny_request(db, room, user, user_id)
+    await table_events.join_requests(state, db, room)
     return await _view(db, state, room, user)
 
 

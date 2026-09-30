@@ -1,7 +1,7 @@
 /** Escolher servidor: trocar de servidor encerra a sessão (as contas são de cada servidor). */
 import { useServer } from '../state/server';
 import { useSession } from '../state/session';
-import { parseJoinLink, probe, type ServerInfo, unreachableHelp } from './discovery';
+import { parseJoinLink, probe, probeTimeout, type ServerInfo, unreachableHelp } from './discovery';
 
 export async function chooseServer(server: ServerInfo): Promise<void> {
   const current = useServer.getState().server;
@@ -9,15 +9,19 @@ export async function chooseServer(server: ServerInfo): Promise<void> {
   await useServer.getState().choose(server);
 }
 
-/** QR code / link rpgplay://join: confere o servidor, escolhe e guarda o PIN para entrar depois do login. */
+/**
+ * QR code / link rpgplay://join: confere o servidor, escolhe e guarda o PIN para entrar depois do login
+ * (e o código de acesso, que a tela de criar conta já preenche).
+ */
 export async function connectFromJoinLink(link: string): Promise<{ ok: true; server: ServerInfo } | { ok: false; error: string }> {
   const parsed = parseJoinLink(link);
   if (!parsed) return { ok: false, error: 'Este QR code não é de uma mesa do RPG Play.' };
-  const server = await probe(parsed.server, 2500);
+  const server = await probe(parsed.server, probeTimeout(parsed.server));
   if (!server) {
     return { ok: false, error: unreachableHelp(parsed.server) };
   }
   await chooseServer(server);
   useServer.getState().setPendingPin(parsed.pin);
+  useServer.getState().setPendingCode(parsed.code);
   return { ok: true, server };
 }

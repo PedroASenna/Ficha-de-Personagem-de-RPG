@@ -5,38 +5,53 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import CircularProgress from "@mui/material/CircularProgress";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useState } from "react";
 
 import { api } from "../api/client";
-import type { Discovery } from "../api/types";
-import { joinLink, serverCandidates } from "./connect";
+import type { Discovery, RemoteShare, Room } from "../api/types";
+import { useSession } from "../auth/session";
+import { copyText } from "../clipboard";
+import { CopyButton, RemoteDialog } from "../screens/RemoteDialog";
+import { toast } from "../toasts";
+import { inviteText, joinLink, serverCandidates } from "./connect";
 
-function ConnectContent({ pin }: { pin: string }) {
-  const discovery = useQuery({ queryKey: ["discovery"], queryFn: () => api<Discovery>("/discovery", { auth: false }) });
-  const candidates = serverCandidates(window.location, discovery.data);
-  const [choice, setChoice] = useState(0);
-  const server = candidates[Math.min(choice, candidates.length - 1)] ?? window.location.origin;
-  const link = joinLink(server, pin);
+function JoinQr({ link, label }: { link: string; label: string }) {
   const qr = useQuery({
     queryKey: ["qr", link],
     queryFn: () => QRCode.toDataURL(link, { margin: 1, width: 300, color: { dark: "#14100d", light: "#f3e3bf" } }),
     staleTime: Infinity,
   });
+  return (
+    <Box
+      sx={{ width: 300, height: 300, borderRadius: 2, overflow: "hidden", bgcolor: "#f3e3bf", flexShrink: 0 }}
+      data-testid="join-qr"
+    >
+      {qr.data && <img src={qr.data} alt={label} width={300} height={300} />}
+    </Box>
+  );
+}
+
+function LocalContent({ pin }: { pin: string }) {
+  const discovery = useQuery({ queryKey: ["discovery"], queryFn: () => api<Discovery>("/discovery", { auth: false }) });
+  const candidates = serverCandidates(window.location, discovery.data);
+  const [choice, setChoice] = useState(0);
+  const server = candidates[Math.min(choice, candidates.length - 1)] ?? window.location.origin;
+  const link = joinLink(server, pin);
 
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ alignItems: "center" }}>
-      <Box
-        sx={{ width: 300, height: 300, borderRadius: 2, overflow: "hidden", bgcolor: "#f3e3bf", flexShrink: 0 }}
-        data-testid="join-qr"
-      >
-        {qr.data && <img src={qr.data} alt={`QR code para entrar na mesa ${pin}`} width={300} height={300} />}
-      </Box>
+      <JoinQr link={link} label={`QR code para entrar na mesa ${pin}`} />
       <Stack spacing={2} sx={{ minWidth: 0 }}>
         <Typography>
           No celular, abra o app <b>RPG Play</b> e toque em <b>Ler QR code da mesa</b>. Ele encontra o servidor e já
@@ -87,12 +102,150 @@ function ConnectContent({ pin }: { pin: string }) {
   );
 }
 
-export function ConnectDialog({ open, pin, onClose }: { open: boolean; pin: string; onClose: () => void }) {
+function InternetContent({ pin }: { pin: string }) {
+  const isAdmin = useSession((s) => s.user?.is_admin ?? false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const share = useQuery({
+    queryKey: ["remote-share"],
+    queryFn: () => api<RemoteShare>("/remote/share"),
+    refetchInterval: (query) => (query.state.data?.enabled && query.state.data.status !== "on" ? 2000 : false),
+  });
+  const data = share.data;
+  const settings = (
+    <>
+      {isAdmin && (
+        <Button variant={data?.enabled ? "text" : "contained"} onClick={() => setSettingsOpen(true)}>
+          {data?.enabled ? "Configurar acesso pela internet" : "Ligar acesso pela internet"}
+        </Button>
+      )}
+      <RemoteDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
+  );
+
+  if (share.error) return <Alert severity="error">{share.error.message}</Alert>;
+  if (!data) return <CircularProgress />;
+  if (!data.enabled) {
+    return (
+      <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
+        <Typography>
+          Quem está longe pode jogar pela internet, de graça e sem mexer no roteador. O servidor cria um link https e um
+          código de acesso para criar conta.
+        </Typography>
+        {!isAdmin && (
+          <Alert severity="info">
+            O acesso pela internet está desligado. O dono do servidor liga no botão <b>Internet</b>, na lista de mesas.
+          </Alert>
+        )}
+        {settings}
+      </Stack>
+    );
+  }
+  if (data.status !== "on" || !data.url || !data.access_code) {
+    return (
+      <Stack spacing={2} sx={{ alignItems: "flex-start" }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+          {data.status !== "error" && <CircularProgress size={24} />}
+          <Typography>
+            {data.status === "error"
+              ? "O link pela internet está com problema."
+              : "Abrindo o link pela internet… (na primeira vez o servidor baixa o programa da Cloudflare)"}
+          </Typography>
+        </Stack>
+        {settings}
+      </Stack>
+    );
+  }
+
+  const { url, access_code: code } = data;
+  const invite = inviteText(url, pin, code);
+  return (
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ alignItems: "center" }}>
+      <JoinQr link={joinLink(url, pin, code)} label={`QR code para entrar na mesa ${pin} pela internet`} />
+      <Stack spacing={2} sx={{ minWidth: 0 }}>
+        <Typography>
+          Mande o convite no grupo (WhatsApp, Discord…). Quem abrir o link no celular entra no app com tudo preenchido;
+          se estiver perto, pode ler o QR code.
+        </Typography>
+        <Box>
+          <Button
+            variant="contained"
+            onClick={() =>
+              void copyText(invite).then((ok) =>
+                ok ? toast.success("Convite copiado.") : toast.error("Não consegui copiar."),
+              )
+            }
+          >
+            Copiar convite
+          </Button>
+        </Box>
+        <Stack spacing={0.5}>
+          <Typography variant="overline" color="text.secondary">
+            Link
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Typography sx={{ fontFamily: "monospace", wordBreak: "break-all" }} data-testid="internet-url">
+              {url}
+            </Typography>
+            <CopyButton text={url} what="Link" />
+          </Stack>
+          <Typography variant="overline" color="text.secondary">
+            Código de acesso · PIN
+          </Typography>
+          <Typography variant="h5" sx={{ fontFamily: "monospace", letterSpacing: 3 }}>
+            <span data-testid="internet-code">{code}</span> · {pin}
+          </Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">
+          O código só é pedido para criar conta pela internet. Com “Aprovar entrada” ligado, ninguém entra na mesa sem
+          você aceitar.
+        </Typography>
+        <Box>{settings}</Box>
+      </Stack>
+    </Stack>
+  );
+}
+
+function ApprovalSwitch({ room }: { room: Room }) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: (value: boolean) =>
+      api<Room>(`/rooms/${room.id}`, { method: "PATCH", json: { require_approval: value } }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["room", room.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: toast.error,
+  });
+  const checked = toggle.isPending ? Boolean(toggle.variables) : Boolean(room.require_approval);
+  return (
+    <FormControlLabel
+      control={<Switch checked={checked} onChange={(event) => toggle.mutate(event.target.checked)} />}
+      label={
+        <Box>
+          <Typography>Aprovar entrada</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Quem entrar pelo PIN espera você aceitar (recomendado quando a mesa está na internet).
+          </Typography>
+        </Box>
+      }
+    />
+  );
+}
+
+export function ConnectDialog({ open, room, onClose }: { open: boolean; room: Room; onClose: () => void }) {
+  const [tab, setTab] = useState<"local" | "internet">("local");
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md">
       <DialogTitle>Conectar celulares</DialogTitle>
       <DialogContent>
-        <ConnectContent pin={pin} />
+        <Tabs value={tab} onChange={(_, value: "local" | "internet") => setTab(value)} sx={{ mb: 2 }}>
+          <Tab value="local" label="Na mesma rede (Wi-Fi)" />
+          <Tab value="internet" label="Pela internet" />
+        </Tabs>
+        {open && (tab === "local" ? <LocalContent pin={room.pin} /> : <InternetContent pin={room.pin} />)}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: "divider" }}>
+          <ApprovalSwitch room={room} />
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Fechar</Button>

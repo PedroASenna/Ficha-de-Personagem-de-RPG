@@ -2,6 +2,7 @@
 // Função pura: fácil de testar e de reaproveitar (o app dos jogadores tem um reducer irmão).
 
 import type {
+  JoinRequest,
   MasterTable,
   Npc,
   PartyMember,
@@ -41,6 +42,8 @@ export interface TableState {
   online: Record<string, boolean>;
   log: LogEntry[];
   lastRoll: LogEntry | null;
+  /** Quem pediu para entrar e espera o Mestre aceitar. */
+  requests: JoinRequest[];
 }
 
 export const initialTableState: TableState = {
@@ -57,6 +60,7 @@ export const initialTableState: TableState = {
   online: {},
   log: [],
   lastRoll: null,
+  requests: [],
 };
 
 export const LOG_LIMIT = 200;
@@ -133,6 +137,7 @@ export type TableAction =
   | { type: "party.updated"; party: PartyMember[] }
   | { type: "member.kicked"; user_id: string }
   | { type: "room.closed" }
+  | { type: "join.requests"; requests: JoinRequest[] }
   | { type: "local/token.position"; token_id: string; x: number; y: number }
   | { type: "local/object.position"; object_id: string; x: number; y: number };
 
@@ -398,6 +403,8 @@ export function tableReducer(state: TableState, action: TableAction): TableState
       return { ...state, online: withoutKey(state.online, action.user_id) };
     case "room.closed":
       return state.room ? { ...state, room: { ...state.room, status: "closed" } } : state;
+    case "join.requests":
+      return { ...state, requests: action.requests };
     default:
       return state;
   }
